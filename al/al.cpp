@@ -1,10 +1,67 @@
 #include <algorithm>
+#include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <vector>
 using namespace std;
+#define fst first
+#define snd second
+typedef pair<int, int> pii;
+typedef long long ll;
 
-int E[48] = {
-	32,	1, 2, 3, 4, 5,
+ll gcd(ll a, ll b) {
+	if (b == 0) return a;
+	return gcd(b, a % b);
+}
+
+struct Frac {
+	ll num, den;
+
+	Frac() {}
+	Frac(ll num, ll den) : num(num), den(den) {}
+
+	void printfloat() const {
+		printf("%6.3f", 1. * num / den);
+	}
+
+	double floatval() const {
+		return 1. * num / den;
+	}
+
+	void reduce() {
+		ll g = gcd(llabs(num), llabs(den));
+		num /= g;
+		den /= g;
+		if (den < 0) { num = -num; den = -den; }
+	}
+
+	Frac operator + (const Frac& f) const {
+		Frac ans(num * f.den + f.num * den, den * f.den);
+		ans.reduce();
+		return ans;
+	}
+
+	Frac operator - (const Frac& f) const {
+		Frac ans(num * f.den - f.num * den, den * f.den);
+		ans.reduce();
+		return ans;
+	}
+
+	Frac operator / (const ll& x) const {
+		Frac ans(num, den * x);
+		ans.reduce();
+		return ans;
+	}
+
+	bool operator < (const Frac& f) const {
+		return num * f.den < den * f.num;
+	}
+};
+
+const int NB_SBOXES = 8;
+
+const int E[48] = {
+	32, 1, 2, 3, 4, 5,
 	4, 5, 6, 7, 8, 9,
 	8, 9, 10, 11, 12, 13,
 	12, 13, 14, 15, 16, 17,
@@ -14,7 +71,7 @@ int E[48] = {
 	28, 29, 30, 31, 32, 1
 };
 
-int P[32] = {
+const int P[32] = {
 	16, 7, 20, 21, 29, 12, 28, 17,
 	1, 15, 23, 26, 5, 18, 31, 10,
 	2, 8, 24, 14, 32, 27, 3, 9,
@@ -72,7 +129,113 @@ const int S[8][4][16] = {
 	}
 };
 
-int main() {
+vector<pii> get_common_input(int sbox1, int sbox2) {
+	assert(abs(sbox1 - sbox2) == 1);
+	vector<pii> ans(2);
+	ans[0].fst = -1;
+	for (int i = 6 * sbox1; i < 6 * (sbox1 + 1); ++i)
+		for (int j = 6 * sbox2; j < 6 * (sbox2 + 1); ++j) {
+			if (E[i] == E[j]) {
+				if (ans[0].fst == -1) { ans[0].fst = i - 6 * sbox1; ans[1].fst = j - 6 * sbox2; }
+				else { ans[0].snd = i - 6 * sbox1; ans[1].snd = j - 6 * sbox2; }
+			}
+		}
+	return ans;
+}
 
+int build_val_with(pii common, int rem_val, int common_val) {
+	int p = 1;
+	int ans = 0;
+	for (int i = 0; i < 6; ++i) {
+		if (common.fst == i) ans += p * (common_val % 2);
+		else if (common.snd == i) ans += p * (common_val / 2);
+		else { ans += p * (rem_val % 2); rem_val /= 2; }
+		p *= 2;
+	}
+	return ans;
+}
+
+int do_sbox(int sbox, int in) {
+	return S[sbox][(in & 1) | ((in >> 4) & 2)][(in >> 1) & ((1 << 4) - 1)];
+}
+
+int xor_all(int x) {
+	int ans = 0;
+	while (x > 0) {
+		ans ^= (x % 2);
+		x /= 2;
+	}
+	return ans;
+}
+
+// [sbox][in][key][out][val]
+Frac papprox[NB_SBOXES][1 << 6][1 << 6][1 << 4][4];
+vector<Frac> l1[1 << 16], l2[1 << 16];
+double M;
+
+void compute_best_approx_one(int sbox, pii common, int in_mask, int key_mask, int out_mask, int common_val) {
+	for (int rem_in_val = 0; rem_in_val < (1 << 4); ++rem_in_val) {
+		int in_val = build_val_with(common, rem_in_val, common_val);
+		for (int key_val = 0; key_val < (1 << 6); ++key_val) {
+			assert(key_mask != in_mask || ((in_val & in_mask) ^ (key_val & key_mask)) == ((in_val ^ key_val) & in_mask));
+			int in_xor = xor_all((in_val & in_mask) ^ (key_val & key_mask));
+			int out_val = do_sbox(sbox, in_val ^ key_val);
+			papprox[sbox][in_mask][key_mask][out_mask][common_val].den++;
+			papprox[sbox][in_mask][key_mask][out_mask][common_val].num += in_xor == xor_all(out_val & out_mask);
+		}
+	}
+}
+
+void compute_best_approx(int sbox1, int sbox2) {
+	vector<pii> common = get_common_input(sbox1, sbox2);	
+	printf("Sboxes %d and %d have input %d and %d in common\n", sbox1, sbox2, common[0].fst, common[0].snd);
+//	double M = 0;
+	for (int in_mask = 1; in_mask < (1 << 6); ++in_mask)
+		for (int key_mask = 1; key_mask < (1 << 6); ++key_mask)
+			for (int out_mask = 1; out_mask < (1 << 4); ++out_mask) {
+//				double x = 0;
+				for (int common_val = 0; common_val < (1 << 2); ++common_val) {
+					compute_best_approx_one(sbox1, common[0], in_mask, key_mask, out_mask, common_val);
+					compute_best_approx_one(sbox2, common[1], in_mask, key_mask, out_mask, common_val);
+//					x += papprox[4][in_mask][key_mask][out_mask][common_val].floatval();
+				}
+				l1[in_mask | (key_mask << 6) | (out_mask << 12)] = vector<Frac>(papprox[sbox1][in_mask][key_mask][out_mask], papprox[sbox1][in_mask][key_mask][out_mask] + 4);
+				l2[in_mask | (key_mask << 6) | (out_mask << 12)] = vector<Frac>(papprox[sbox2][in_mask][key_mask][out_mask], papprox[sbox2][in_mask][key_mask][out_mask] + 4);
+//				M = max(M, fabs(x / 4 - 0.5));
+			}
+//	printf("%.4f\n", M);
+/*
+	for (int in_mask = 1; in_mask < (1 << 6); ++in_mask) {
+		int key_mask = in_mask;
+		for (int out_mask = 1; out_mask < (1 << 4); ++out_mask) {
+			Frac f(0, 1);
+			for (int i = 0; i < 4; ++i)
+				f = f + papprox[4][in_mask][key_mask][out_mask][i];
+			f = (f / 4) - Frac(1, 2);
+			f.printfloat();
+			printf(" ");
+		}
+		puts("");
+	}
+*/
+}
+
+int main() {
+	compute_best_approx(4, 5);	
+/*
+	for (int in_mask = 1; in_mask <= (1 << 5); ++in_mask) {
+		for (int out_mask = 1; out_mask < (1 << 4); ++out_mask) {
+			int c = 0;
+			for (int in_val = 0; in_val < (1 << 6); ++in_val) {
+				int out_val = do_sbox(4, in_val);
+				if (xor_all(out_val & out_mask) == xor_all(in_val & in_mask))
+					c++;
+			}
+			printf("%3d ", c - 32);
+				
+		}
+		puts("");
+	}
+*/
 	return 0;
 }
