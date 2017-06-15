@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <queue>
 #include <vector>
 using namespace std;
 #define fst first
@@ -43,6 +44,12 @@ struct Frac {
 
 	Frac operator - (const Frac& f) const {
 		Frac ans(num * f.den - f.num * den, den * f.den);
+		ans.reduce();
+		return ans;
+	}
+
+	Frac operator * (const Frac& f) const {
+		Frac ans(num * f.num, den * f.den);
 		ans.reduce();
 		return ans;
 	}
@@ -130,7 +137,7 @@ const int S[8][4][16] = {
 };
 
 vector<pii> get_common_input(int sbox1, int sbox2) {
-	assert(abs(sbox1 - sbox2) == 1);
+	assert(abs(min(sbox1 - sbox2, min(8 - sbox1 + sbox2, 8 - sbox2 + sbox1))) == 1);
 	vector<pii> ans(2);
 	ans[0].fst = -1;
 	for (int i = 6 * sbox1; i < 6 * (sbox1 + 1); ++i)
@@ -143,10 +150,10 @@ vector<pii> get_common_input(int sbox1, int sbox2) {
 	return ans;
 }
 
-int build_val_with(pii common, int rem_val, int common_val) {
+int build_val_with(pii common, int rem_val, int common_val, int nb_bits) {
 	int p = 1;
 	int ans = 0;
-	for (int i = 0; i < 6; ++i) {
+	for (int i = 0; i < nb_bits; ++i) {
 		if (common.fst == i) ans += p * (common_val % 2);
 		else if (common.snd == i) ans += p * (common_val / 2);
 		else { ans += p * (rem_val % 2); rem_val /= 2; }
@@ -171,11 +178,10 @@ int xor_all(int x) {
 // [sbox][in][key][out][val]
 Frac papprox[NB_SBOXES][1 << 6][1 << 6][1 << 4][4];
 vector<Frac> l1[1 << 16], l2[1 << 16];
-double M;
 
 void compute_best_approx_one(int sbox, pii common, int in_mask, int key_mask, int out_mask, int common_val) {
 	for (int rem_in_val = 0; rem_in_val < (1 << 4); ++rem_in_val) {
-		int in_val = build_val_with(common, rem_in_val, common_val);
+		int in_val = build_val_with(common, rem_in_val, common_val, 6);
 		for (int key_val = 0; key_val < (1 << 6); ++key_val) {
 			assert(key_mask != in_mask || ((in_val & in_mask) ^ (key_val & key_mask)) == ((in_val ^ key_val) & in_mask));
 			int in_xor = xor_all((in_val & in_mask) ^ (key_val & key_mask));
@@ -186,24 +192,68 @@ void compute_best_approx_one(int sbox, pii common, int in_mask, int key_mask, in
 	}
 }
 
+Frac get_dist(vector<Frac> f1, vector<Frac> f2) {
+	Frac ans(0, 1);
+	for (int i = 0; i < 4; ++i)
+		ans = ans + f1[i] * f2[i] + (Frac(1, 1) - f1[i]) * (Frac(1, 1) - f2[i]);
+	return ans / 4;
+}
+
+int cut(int x, int n) {
+	return x & ((1 << n) - 1);
+}
+
 void compute_best_approx(int sbox1, int sbox2) {
 	vector<pii> common = get_common_input(sbox1, sbox2);	
 	printf("Sboxes %d and %d have input %d and %d in common\n", sbox1, sbox2, common[0].fst, common[0].snd);
-//	double M = 0;
-	for (int in_mask = 1; in_mask < (1 << 6); ++in_mask)
-		for (int key_mask = 1; key_mask < (1 << 6); ++key_mask)
-			for (int out_mask = 1; out_mask < (1 << 4); ++out_mask) {
-//				double x = 0;
+	double M = 0;
+	for (int in_mask = 0; in_mask < (1 << 6); ++in_mask)
+		for (int key_mask = 0; key_mask < (1 << 6); ++key_mask)
+			for (int out_mask = 0; out_mask < (1 << 4); ++out_mask) {
+				double x = 0;
 				for (int common_val = 0; common_val < (1 << 2); ++common_val) {
 					compute_best_approx_one(sbox1, common[0], in_mask, key_mask, out_mask, common_val);
 					compute_best_approx_one(sbox2, common[1], in_mask, key_mask, out_mask, common_val);
-//					x += papprox[4][in_mask][key_mask][out_mask][common_val].floatval();
+					x += papprox[sbox1][in_mask][key_mask][out_mask][common_val].floatval();
 				}
 				l1[in_mask | (key_mask << 6) | (out_mask << 12)] = vector<Frac>(papprox[sbox1][in_mask][key_mask][out_mask], papprox[sbox1][in_mask][key_mask][out_mask] + 4);
 				l2[in_mask | (key_mask << 6) | (out_mask << 12)] = vector<Frac>(papprox[sbox2][in_mask][key_mask][out_mask], papprox[sbox2][in_mask][key_mask][out_mask] + 4);
-//				M = max(M, fabs(x / 4 - 0.5));
+				if (in_mask != 0) {
+					M = max(M, fabs(x / 4 - 0.5));
+				}
 			}
-//	printf("%.4f\n", M);
+	printf("%.4f\n", M);
+	double ans = 0;
+	priority_queue<pair<double, pii>, vector<pair<double, pii>>, greater<pair<double, pii>>> q;
+	const int qsz = 1 << 20;
+//	for (int com_mask = 0; com_mask < (1 << 4); ++com_mask) {
+//		if ((com_mask & (com_mask >> 2) & 1) || ((com_mask >> 1) & (com_mask >> 3) & 1))
+//			continue;
+	for (int in_mask = 0; in_mask < (1 << 12); ++in_mask) {
+		for (int key_mask = 0; key_mask < (1 << 12); ++key_mask)
+			for (int out_mask = 0; out_mask < (1 << 8); ++out_mask) {
+				int i = cut(in_mask, 6) | (cut(key_mask, 6) << 6) | (cut(out_mask, 4) << 12);
+				int j = (in_mask >> 6) | ((key_mask >> 6) << 6) | ((out_mask >> 4) << 12);
+				if (l1[i].empty() || l2[j].empty())
+					continue;
+				double x = fabs(get_dist(l1[i], l2[j]).floatval() - 0.5);
+				q.push({x, {i, j}});
+				ans = max(ans, x);
+				if (int(q.size()) > qsz)
+					q.pop();
+			}
+		if (in_mask % 4 == 0)
+			printf("%.4f%%\n", 100. * in_mask / (1 << 12));
+	}
+	printf("together = %.4f\n", ans);
+	char name[64];
+	sprintf(name, "approx%d%d", sbox1, sbox2);
+	FILE *fp = fopen(name, "w+");
+	while (!q.empty()) {
+		fprintf(fp, "%d %d %f\n", q.top().snd.fst, q.top().snd.snd, q.top().fst);
+		q.pop();
+	}
+	fclose(fp);
 /*
 	for (int in_mask = 1; in_mask < (1 << 6); ++in_mask) {
 		int key_mask = in_mask;
@@ -221,7 +271,9 @@ void compute_best_approx(int sbox1, int sbox2) {
 }
 
 int main() {
-	compute_best_approx(4, 5);	
+	for (int i = 0; i < 8; ++i)
+		compute_best_approx(i, (i + 1) % 8);	
+//	compute_best_approx(0, 1);
 /*
 	for (int in_mask = 1; in_mask <= (1 << 5); ++in_mask) {
 		for (int out_mask = 1; out_mask < (1 << 4); ++out_mask) {
