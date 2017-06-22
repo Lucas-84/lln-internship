@@ -2,13 +2,16 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <queue>
 #include <vector>
 using namespace std;
 #define fst first
 #define snd second
-typedef pair<int, int> pii;
+#define mp make_pair
 typedef long long ll;
+typedef pair<int, int> pii;
+typedef pair<ll, ll> pll;
 
 ll gcd(ll a, ll b) {
 	if (b == 0) return a;
@@ -18,11 +21,11 @@ ll gcd(ll a, ll b) {
 struct Frac {
 	ll num, den;
 
-	Frac() {}
+	Frac() { num = 0; den = 1; }
 	Frac(ll num, ll den) : num(num), den(den) {}
 
 	void printfloat() const {
-		printf("%6.3f", 1. * num / den);
+		printf("%.8f", 1. * num / den);
 	}
 
 	double floatval() const {
@@ -48,6 +51,12 @@ struct Frac {
 		return ans;
 	}
 
+	Frac operator * (const ll& x) const {
+		Frac ans(num * x, den);
+		ans.reduce();
+		return ans;
+	}
+
 	Frac operator * (const Frac& f) const {
 		Frac ans(num * f.num, den * f.den);
 		ans.reduce();
@@ -63,6 +72,78 @@ struct Frac {
 	bool operator < (const Frac& f) const {
 		return num * f.den < den * f.num;
 	}
+
+	bool operator == (const Frac& f) const {
+		return num * f.den == den * f.num;
+	}
+	
+	bool operator >= (const Frac& f) const {
+		return f < *this || f == *this;
+	}
+};
+
+struct Matrix {
+	vector<vector<ll>> m;
+
+	Matrix() {}
+	Matrix(int n) {
+		m = vector<vector<ll>>(n);
+		for (int i = 0; i < n; ++i) {
+			m[i] = vector<ll>(n);
+			m[i][i] = 1;
+		}
+	}
+
+	Matrix operator * (const Matrix& o) {
+		int n = int(m.size());
+		assert(n == int(o.m.size()));
+		Matrix ans(n);
+		for (int i = 0; i < n; ++i)
+			for (int j = 0; j < n; ++j) {
+				ans.m[i][j] = 0;
+				for (int k = 0; k < n; ++k)
+					ans.m[i][j] += m[i][k] * o.m[k][j];
+			}
+		return ans;
+	}
+
+	ll norm1() const {
+		ll ans = 0;
+		int n = int(m.size());
+		for (int i = 0; i < n; ++i)
+			for (int j = 0; j < n; ++j)
+				ans += m[i][j];
+		return ans;
+	}
+
+	ll trace() const {
+		ll ans = 0;
+		for (int i = 0; i < int(m.size()); ++i)
+			ans += m[i][i];
+		return ans;
+	}
+
+	void print() const {
+		int n = int(m.size());
+		for (int i = 0; i < n; ++i, puts(""))
+			for (int j = 0; j < n; ++j)
+				printf("%2lld ", m[i][j]);
+	}
+
+	bool operator < (const Matrix& o) const {
+		return llabs(norm1()) > llabs(o.norm1());
+	}
+
+	bool operator == (const Matrix& o) const {
+		int n = int(m.size());
+		for (int i = 0; i < n; ++i)
+			for (int j = 0; j < n; ++j)
+				if (m[i][j] != o.m[i][j])
+					return false;
+		return true;
+	}
+
+
 };
 
 const int NB_SBOXES = 8;
@@ -136,27 +217,31 @@ const int S[8][4][16] = {
 	}
 };
 
-vector<pii> get_common_input(int sbox1, int sbox2) {
-	assert(abs(min(sbox1 - sbox2, min(8 - sbox1 + sbox2, 8 - sbox2 + sbox1))) == 1);
-	vector<pii> ans(2);
-	ans[0].fst = -1;
-	for (int i = 6 * sbox1; i < 6 * (sbox1 + 1); ++i)
-		for (int j = 6 * sbox2; j < 6 * (sbox2 + 1); ++j) {
-			if (E[i] == E[j]) {
-				if (ans[0].fst == -1) { ans[0].fst = i - 6 * sbox1; ans[1].fst = j - 6 * sbox2; }
-				else { ans[0].snd = i - 6 * sbox1; ans[1].snd = j - 6 * sbox2; }
-			}
-		}
+ll applyp(ll x) {
+	int ans = 0;
+	for (int i = 31; i >= 0; --i)
+		ans = (ans << 1) | ((x >> (P[i] - 1)) & 1);
 	return ans;
 }
 
-int build_val_with(pii common, int rem_val, int common_val, int nb_bits) {
+vector<int> get_com_pos(int sbox1, int sbox2) {
+//	assert(abs(min(sbox1 - sbox2, min(8 - sbox1 + sbox2, 8 - sbox2 + sbox1))) == 1);
+	vector<int> ans;
+	for (int i = 0; i < 6; ++i)
+		for (int j = 0; j < 6; ++j)
+			if (E[6 * sbox1 + i] == E[6 * sbox2 + j])
+				ans.push_back(6 - i - 1);
+	return ans;
+}
+
+int merge_bits(vector<int> com_pos, int rem_val, int com_val, int nb_bits) {
 	int p = 1;
 	int ans = 0;
 	for (int i = 0; i < nb_bits; ++i) {
-		if (common.fst == i) ans += p * (common_val % 2);
-		else if (common.snd == i) ans += p * (common_val / 2);
-		else { ans += p * (rem_val % 2); rem_val /= 2; }
+		bool rem = find(com_pos.begin(), com_pos.end(), i) == com_pos.end(); 
+		int& val = rem ? rem_val : com_val;
+		ans += p * (val % 2);
+		val /= 2;
 		p *= 2;
 	}
 	return ans;
@@ -175,119 +260,162 @@ int xor_all(int x) {
 	return ans;
 }
 
-// [sbox][in][key][out][val]
-Frac papprox[NB_SBOXES][1 << 6][1 << 6][1 << 4][4];
-vector<Frac> l1[1 << 16], l2[1 << 16];
-
-void compute_best_approx_one(int sbox, pii common, int in_mask, int key_mask, int out_mask, int common_val) {
-	for (int rem_in_val = 0; rem_in_val < (1 << 4); ++rem_in_val) {
-		int in_val = build_val_with(common, rem_in_val, common_val, 6);
-		for (int key_val = 0; key_val < (1 << 6); ++key_val) {
-			assert(key_mask != in_mask || ((in_val & in_mask) ^ (key_val & key_mask)) == ((in_val ^ key_val) & in_mask));
-			int in_xor = xor_all((in_val & in_mask) ^ (key_val & key_mask));
-			int out_val = do_sbox(sbox, in_val ^ key_val);
-			papprox[sbox][in_mask][key_mask][out_mask][common_val].den++;
-			papprox[sbox][in_mask][key_mask][out_mask][common_val].num += in_xor == xor_all(out_val & out_mask);
-		}
-	}
-}
-
-Frac get_dist(vector<Frac> f1, vector<Frac> f2) {
-	Frac ans(0, 1);
-	for (int i = 0; i < 4; ++i)
-		ans = ans + f1[i] * f2[i] + (Frac(1, 1) - f1[i]) * (Frac(1, 1) - f2[i]);
-	return ans / 4;
-}
-
 int cut(int x, int n) {
 	return x & ((1 << n) - 1);
 }
 
-void compute_best_approx(int sbox1, int sbox2) {
-	vector<pii> common = get_common_input(sbox1, sbox2);	
-	printf("Sboxes %d and %d have input %d and %d in common\n", sbox1, sbox2, common[0].fst, common[0].snd);
-	double M = 0;
-	for (int in_mask = 0; in_mask < (1 << 6); ++in_mask)
-		for (int key_mask = 0; key_mask < (1 << 6); ++key_mask)
-			for (int out_mask = 0; out_mask < (1 << 4); ++out_mask) {
-				double x = 0;
-				for (int common_val = 0; common_val < (1 << 2); ++common_val) {
-					compute_best_approx_one(sbox1, common[0], in_mask, key_mask, out_mask, common_val);
-					compute_best_approx_one(sbox2, common[1], in_mask, key_mask, out_mask, common_val);
-					x += papprox[sbox1][in_mask][key_mask][out_mask][common_val].floatval();
-				}
-				l1[in_mask | (key_mask << 6) | (out_mask << 12)] = vector<Frac>(papprox[sbox1][in_mask][key_mask][out_mask], papprox[sbox1][in_mask][key_mask][out_mask] + 4);
-				l2[in_mask | (key_mask << 6) | (out_mask << 12)] = vector<Frac>(papprox[sbox2][in_mask][key_mask][out_mask], papprox[sbox2][in_mask][key_mask][out_mask] + 4);
-				if (in_mask != 0) {
-					M = max(M, fabs(x / 4 - 0.5));
-				}
-			}
-	printf("%.4f\n", M);
-	double ans = 0;
-	priority_queue<pair<double, pii>, vector<pair<double, pii>>, greater<pair<double, pii>>> q;
-	const int qsz = 1 << 20;
-//	for (int com_mask = 0; com_mask < (1 << 4); ++com_mask) {
-//		if ((com_mask & (com_mask >> 2) & 1) || ((com_mask >> 1) & (com_mask >> 3) & 1))
-//			continue;
-	for (int in_mask = 0; in_mask < (1 << 12); ++in_mask) {
-		for (int key_mask = 0; key_mask < (1 << 12); ++key_mask)
-			for (int out_mask = 0; out_mask < (1 << 8); ++out_mask) {
-				int i = cut(in_mask, 6) | (cut(key_mask, 6) << 6) | (cut(out_mask, 4) << 12);
-				int j = (in_mask >> 6) | ((key_mask >> 6) << 6) | ((out_mask >> 4) << 12);
-				if (l1[i].empty() || l2[j].empty())
-					continue;
-				double x = fabs(get_dist(l1[i], l2[j]).floatval() - 0.5);
-				q.push({x, {i, j}});
-				ans = max(ans, x);
-				if (int(q.size()) > qsz)
-					q.pop();
-			}
-		if (in_mask % 4 == 0)
-			printf("%.4f%%\n", 100. * in_mask / (1 << 12));
+void print_bits(ll x, int n) {
+	for (int i = n - 1; i >= 0; --i) {
+		printf("%lld", (x >> i) & 1);
+		if ((n - i) % 4 == 0)
+			printf(" ");
 	}
-	printf("together = %.4f\n", ans);
-	char name[64];
-	sprintf(name, "approx%d%d", sbox1, sbox2);
-	FILE *fp = fopen(name, "w+");
+}
+
+pair<Matrix, int> aone[NB_SBOXES][1 << 8];
+
+void compute_bias_sbox(int sbox, int mask) {
+	Matrix& m = aone[sbox][mask].fst;
+	aone[sbox][mask].snd = mask;
+	m = Matrix(4);
+	vector<int> com_pos_bef = get_com_pos(sbox, (sbox - 1 + NB_SBOXES) % NB_SBOXES);
+	vector<int> com_pos_aft = get_com_pos(sbox, (sbox + 1) % NB_SBOXES);
+	for (int com_val_bef = 0; com_val_bef < 4; ++com_val_bef)
+		for (int com_val_aft = 0; com_val_aft < 4; ++com_val_aft) {
+			ll& r = m.m[com_val_bef][com_val_aft];
+			r = -2;
+			for (int rem_val = 0; rem_val < 4; ++rem_val) {
+				int in_val = merge_bits(com_pos_aft, rem_val, com_val_aft, 4);
+				in_val = merge_bits(com_pos_bef, in_val, com_val_bef, 6);
+				r += xor_all(in_val & cut(mask << 2, 6)) == xor_all(do_sbox(sbox, in_val) & (mask >> 4));
+			}
+//			r = abs(r);
+		}
+}
+
+ll goal(vector<int> p) {
+	Matrix m = aone[0][p[0]].fst;
+	for (int i = 1; i < 8; ++i)
+		m = m * aone[i][p[i]].fst;
+	return m.trace();
+}
+
+void generate(vector<pair<Matrix, pll>>& v, Matrix m, ll in, ll out, int i, int imax, int c = 0) {
+	if (i >= imax) {
+		v.push_back({m, {in, out}});
+		return;
+	}
+	for (int x = 0; x < (1 << 5); ++x) {
+		int p = aone[i][x].snd;
+		generate(v, m * aone[i][x].fst, (in << 4) | cut(p, 4), (out << 4) | (p >> 4), i + 1, imax, c + 1);
+	}
+}
+
+map<ll, pair<ll, Frac>> mone;
+vector<pair<pll, Frac>> vone;
+
+void compute_best_approx_one() {
+	for (int i = 0; i < 8; ++i)
+		sort(aone[i], aone[i] + (1 << 8));
+	/*
+	for (int i = 0; i < 8; ++i)
+		for (int j = 1; j < 256; ++j) {
+			int k = rand() % j;
+			swap(aone[i][j], aone[i][k]);
+		}
+	*/
+
+	vector<pair<Matrix, pll>> left, right;
+	generate(left, Matrix(4), 0, 0, 0, 4);
+	generate(right, Matrix(4), 0, 0, 4, 8);
+	puts("end of generation");
+	sort(left.begin(), left.end());
+	sort(right.begin(), right.end());
+	priority_queue<pair<ll, pll>, vector<pair<ll, pll>>, greater<pair<ll, pll>>> q;
+	for (int i = 0; i < (1 << 12); ++i) {
+		auto l = left[i];
+		for (int j = 0; j < (1 << 12); ++j) {
+			auto r = right[j];
+			ll g = (l.fst * r.fst).trace();
+			q.push({abs(g), {(l.snd.fst << 16) | r.snd.fst, applyp((l.snd.snd << 16) | r.snd.snd)}});
+			if (q.size() > 100000)
+				q.pop();
+		}
+	}
+	puts("end of combining");
 	while (!q.empty()) {
-		fprintf(fp, "%d %d %f\n", q.top().snd.fst, q.top().snd.snd, q.top().fst);
+		ll g = q.top().fst;
+		/*
+		print_bits(q.top().snd.fst, 32);
+		puts("");
+		print_bits(q.top().snd.snd, 32);
+		puts("");
+		printf("Bias = ");
+		Frac(g, 1ll << 25).printfloat();
+		puts("");
+		*/
+		mone[q.top().snd.snd] = {q.top().snd.fst, Frac(g, 1ll << 25)}; 
+		vone.push_back({q.top().snd, Frac(g, 1ll << 25)});
 		q.pop();
 	}
-	fclose(fp);
-/*
-	for (int in_mask = 1; in_mask < (1 << 6); ++in_mask) {
-		int key_mask = in_mask;
-		for (int out_mask = 1; out_mask < (1 << 4); ++out_mask) {
-			Frac f(0, 1);
-			for (int i = 0; i < 4; ++i)
-				f = f + papprox[4][in_mask][key_mask][out_mask][i];
-			f = (f / 4) - Frac(1, 2);
-			f.printfloat();
-			printf(" ");
+	puts("end of push");
+}
+
+Frac B[25];
+ll gammax[25], gammay[25];
+
+void compute_best_approx(int levelmax, int level = 1, Frac f = Frac(1, 1)) {
+	if (level > levelmax)
+		return;
+	if (level <= 2) {
+		for (int i = int(vone.size()) - 1; int(vone.size()) - i < 1e3 && i >= 0; --i) {
+			if (level == 1 && i == int(vone.size()) - 1)
+				continue;
+
+			gammay[level] = vone[i].fst.snd;
+			gammax[level] = vone[i].fst.fst;
+			Frac ftot = f * vone[i].snd;
+			if (ftot * B[levelmax - level] * (1 << level) >= B[levelmax]) {
+				if (level == levelmax) {
+					assert(B[levelmax - level] == Frac(1, 1));
+//					assert(ftot >= B[levelmax]);
+					B[levelmax] = max(B[levelmax], ftot * (1 << (levelmax - 1)));
+				}
+				else
+					compute_best_approx(levelmax, level + 1, ftot);
+			}
 		}
-		puts("");
+		return;
 	}
-*/
+	gammay[level] = gammay[level - 2] ^ gammax[level - 1];
+	if (mone.find(gammay[level]) == mone.end())
+		return;
+	gammax[level] = mone[gammay[level]].fst;
+	Frac ftot = f * mone[gammay[level]].snd;
+	if (ftot * B[levelmax - level] * (1 << level) >= B[levelmax]) {
+		if (level == levelmax) {
+			assert(B[levelmax - level] == Frac(1, 1));
+//			assert(ftot >= B[levelmax]);
+			B[levelmax] = max(B[levelmax], ftot * (1 << (levelmax - 1)));
+		}
+		else
+			compute_best_approx(levelmax, level + 1, ftot);
+	}
 }
 
 int main() {
+	srand(time(NULL));
 	for (int i = 0; i < 8; ++i)
-		compute_best_approx(i, (i + 1) % 8);	
-//	compute_best_approx(0, 1);
-/*
-	for (int in_mask = 1; in_mask <= (1 << 5); ++in_mask) {
-		for (int out_mask = 1; out_mask < (1 << 4); ++out_mask) {
-			int c = 0;
-			for (int in_val = 0; in_val < (1 << 6); ++in_val) {
-				int out_val = do_sbox(4, in_val);
-				if (xor_all(out_val & out_mask) == xor_all(in_val & in_mask))
-					c++;
-			}
-			printf("%3d ", c - 32);
-				
-		}
+		for (int mask = 0; mask < (1 << 8); ++mask)
+			compute_bias_sbox(i, mask);
+
+	compute_best_approx_one();
+	B[0] = Frac(1, 1);
+	for (int level = 1; level <= 6; ++level) {
+		compute_best_approx(level);
+		printf("Best bias for level %d = ", level);
+		B[level].printfloat();
 		puts("");
 	}
-*/
 	return 0;
 }
