@@ -314,7 +314,7 @@ void generate(vector<pair<Matrix, pll>>& v, Matrix m, ll in, ll out, int i, int 
 		v.push_back({m, {in, out}});
 		return;
 	}
-	int upp = i == 0 || i == 4 ? 256 : (1 << 4);
+	int upp = i == 0 || i == 4 ? 256 : (1 << 5);
 //	int upp = 1 << 4;
 	for (int x = 0; x < upp; ++x) {
 		int p = aone[i][x].snd;
@@ -332,12 +332,14 @@ ll shiftrot(ll x) {
 void compute_best_approx_one() {
 	for (int i = 0; i < 8; ++i)
 		sort(aone[i], aone[i] + (1 << 8), compare_aone);
+	/*
 	for (int i = 0; i < (1 << 8); ++i) {
 		if (aone[0][i].snd == ((1 << 6) | (3 << 1))) {
 			printf("position %d\n", i);
 			break;
 		}
 	}
+	*/
 	/*
 	for (int i = 0; i < 8; ++i)
 		for (int j = 1; j < 256; ++j) {
@@ -353,19 +355,66 @@ void compute_best_approx_one() {
 	sort(left.begin(), left.end());
 	sort(right.begin(), right.end());
 	puts("end of sorting");
+	vector<int> idleft, idright;
+	for (int it = 0; it < 32; ++it) {
+		// TODO: generate random vectors *on the sphere*
+		vector<double> v(16);
+		double norm = 0;	
+		for (int i = 0; i < 16; ++i) {
+			v[i] = rand() - RAND_MAX / 2;
+			norm += v[i] * v[i];
+		}
+		printf("got norm = %f\n", norm);
+		assert(norm != 0);
+		norm = sqrt(norm);
+		for (int i = 0; i < 16; ++i) {
+			v[i] /= norm;
+			printf("%f ", v[i]);
+		}
+		puts(" generated");
+		vector<pair<double, int>> l;
+		for (int p = 0; p < int(left.size()); ++p) {
+			double ans = 0;
+			for (int i = 0; i < 4; ++i)
+				for (int j = 0; j < 4; ++j)
+					ans += left[p].fst.m[j][i] * v[4 * i + j];
+			l.push_back({fabs(ans), p});
+		}
+		sort(l.begin(), l.end(), greater<pair<double, int>>());
+		for (int i = 0; i < (1 << 10); ++i)
+			idleft.push_back(l[i].snd);
+		l.clear();
+		for (int p = 0; p < int(right.size()); ++p) {
+			double ans = 0;
+			for (int i = 0; i < 4; ++i)
+				for (int j = 0; j < 4; ++j)
+					ans += right[p].fst.m[i][j] * v[4 * i + j];
+			l.push_back({fabs(ans), p});
+		}
+		sort(l.begin(), l.end(), greater<pair<double, int>>());
+		for (int i = 0; i < (1 << 10); ++i)
+			idright.push_back(l[i].snd);
+	}
+	sort(idleft.begin(), idleft.end());
+	sort(idright.begin(), idright.end());
+	printf("Size left = %d | Size right = %d\n", int(idleft.size()), int(idright.size()));
+	auto it = unique(idleft.begin(), idleft.end());
+	idleft.resize(distance(idleft.begin(), it));
+	it = unique(idright.begin(), idright.end());
+	idright.resize(distance(idright.begin(), it));
+	printf("Size left = %d | Size right = %d\n", int(idleft.size()), int(idright.size()));
 	priority_queue<pair<ll, pll>, vector<pair<ll, pll>>, greater<pair<ll, pll>>> q;
-	for (int i = 0; i < (1 << 13); ++i) {
+	for (int i: idleft) {
 		auto l = left[i];
-		for (int j = 0; j < (1 << 13); ++j) {
+		for (int j: idright) {
 			auto r = right[j];
 			ll g = (l.fst * r.fst).trace();
 			q.push({llabs(g), {shiftrot((l.snd.fst << 16) | r.snd.fst), applyp((l.snd.snd << 16) | r.snd.snd)}});
-			if (q.size() > (1 << 22))
+			if (q.size() > (1 << 24))
 				q.pop();
 		}
-		if (i % 100 == 0)
-			printf("%.0f%%\n", 100.*i/(1<<13));
 	}
+
 	puts("end of combining");
 	int c = 0;
 	while (!q.empty()) {
