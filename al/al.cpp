@@ -25,7 +25,7 @@ struct Frac {
 	Frac(ll num, ll den) : num(num), den(den) {}
 
 	void printfloat() const {
-		printf("%.8f", 1. * num / den);
+		printf("%.40f", 1. * num / den);
 	}
 
 	double floatval() const {
@@ -143,7 +143,6 @@ struct Matrix {
 		return true;
 	}
 
-
 };
 
 const int NB_SBOXES = 8;
@@ -217,10 +216,23 @@ const int S[8][4][16] = {
 	}
 };
 
+ll cut(ll x, ll n) {
+	return x & ((1ll << n) - 1);
+}
+
+void print_bits(ll x, int n) {
+	for (int i = n - 1; i >= 0; --i) {
+		printf("%lld", (x >> i) & 1);
+		if ((n - i) % 4 == 0)
+			printf(" ");
+	}
+}
+
 ll applyp(ll x) {
 	int ans = 0;
-	for (int i = 31; i >= 0; --i)
-		ans = (ans << 1) | ((x >> (P[i] - 1)) & 1);
+	for (int i = 31; i >= 0; --i) {
+		ans = (ans << 1) | ((x >> (32 - P[31 - i])) & 1);
+	}
 	return ans;
 }
 
@@ -260,19 +272,16 @@ int xor_all(int x) {
 	return ans;
 }
 
-int cut(int x, int n) {
-	return x & ((1 << n) - 1);
-}
-
-void print_bits(ll x, int n) {
-	for (int i = n - 1; i >= 0; --i) {
-		printf("%lld", (x >> i) & 1);
-		if ((n - i) % 4 == 0)
-			printf(" ");
-	}
-}
 
 pair<Matrix, int> aone[NB_SBOXES][1 << 8];
+
+bool compare_aone(const pair<Matrix, int>& x, const pair<Matrix, int>& y) {
+	bool is_x = (x.snd & (3 << 2)) == x.snd;
+	bool is_y = (y.snd & (3 << 2)) == y.snd;
+	if (is_x && !is_y) return true;
+	if (is_y && !is_x) return false;
+	return x.fst < y.fst;
+}
 
 void compute_bias_sbox(int sbox, int mask) {
 	Matrix& m = aone[sbox][mask].fst;
@@ -305,18 +314,30 @@ void generate(vector<pair<Matrix, pll>>& v, Matrix m, ll in, ll out, int i, int 
 		v.push_back({m, {in, out}});
 		return;
 	}
-	for (int x = 0; x < (1 << 5); ++x) {
+	int upp = i == 0 || i == 4 ? 256 : (1 << 4);
+//	int upp = 1 << 4;
+	for (int x = 0; x < upp; ++x) {
 		int p = aone[i][x].snd;
 		generate(v, m * aone[i][x].fst, (in << 4) | cut(p, 4), (out << 4) | (p >> 4), i + 1, imax, c + 1);
 	}
 }
 
-map<ll, pair<ll, Frac>> mone;
+map<ll, vector<pair<ll, Frac>>> mone;
 vector<pair<pll, Frac>> vone;
+
+ll shiftrot(ll x) {
+	return cut(x << 1, 32) | ((x >> 31) & 1);
+}
 
 void compute_best_approx_one() {
 	for (int i = 0; i < 8; ++i)
-		sort(aone[i], aone[i] + (1 << 8));
+		sort(aone[i], aone[i] + (1 << 8), compare_aone);
+	for (int i = 0; i < (1 << 8); ++i) {
+		if (aone[0][i].snd == ((1 << 6) | (3 << 1))) {
+			printf("position %d\n", i);
+			break;
+		}
+	}
 	/*
 	for (int i = 0; i < 8; ++i)
 		for (int j = 1; j < 256; ++j) {
@@ -331,18 +352,22 @@ void compute_best_approx_one() {
 	puts("end of generation");
 	sort(left.begin(), left.end());
 	sort(right.begin(), right.end());
+	puts("end of sorting");
 	priority_queue<pair<ll, pll>, vector<pair<ll, pll>>, greater<pair<ll, pll>>> q;
-	for (int i = 0; i < (1 << 12); ++i) {
+	for (int i = 0; i < (1 << 13); ++i) {
 		auto l = left[i];
-		for (int j = 0; j < (1 << 12); ++j) {
+		for (int j = 0; j < (1 << 13); ++j) {
 			auto r = right[j];
 			ll g = (l.fst * r.fst).trace();
-			q.push({abs(g), {(l.snd.fst << 16) | r.snd.fst, applyp((l.snd.snd << 16) | r.snd.snd)}});
-			if (q.size() > 100000)
+			q.push({llabs(g), {shiftrot((l.snd.fst << 16) | r.snd.fst), applyp((l.snd.snd << 16) | r.snd.snd)}});
+			if (q.size() > (1 << 22))
 				q.pop();
 		}
+		if (i % 100 == 0)
+			printf("%.0f%%\n", 100.*i/(1<<13));
 	}
 	puts("end of combining");
+	int c = 0;
 	while (!q.empty()) {
 		ll g = q.top().fst;
 		/*
@@ -354,35 +379,58 @@ void compute_best_approx_one() {
 		Frac(g, 1ll << 25).printfloat();
 		puts("");
 		*/
-		mone[q.top().snd.snd] = {q.top().snd.fst, Frac(g, 1ll << 25)}; 
+//		assert(mone.find(q.top().snd.snd) == mone.end());
+		if (q.top().snd.fst == ((1 << 15)) && q.top().snd.snd == ((1 << 7) | (1 << 18) | (1 << 24) | (1 << 29)))
+			printf("A here: %d\n", c);
+		if (q.top().snd.fst == ((1 << 27) | (1 << 28) | (1 << 30) | (1ll << 31)) && q.top().snd.snd == ((1 << 15)))
+			printf("B here: %d\n", c);
+		if (q.top().snd.fst == ((1 << 29)) && q.top().snd.snd == ((1 << 15)))
+			printf("C here: %d\n", c);
+		if (q.top().snd.fst == ((1 << 15)) && q.top().snd.snd == ((1 << 7) | (1 << 18) | (1 << 24)))
+			printf("D here: %d\n", c);
+		if (q.top().snd.fst == ((1 << 12) | (1 << 16)) && q.top().snd.snd == ((1 << 7) | (1 << 18) | (1 << 24)))
+			printf("E here: %d\n", c);
+		if (mone.find(q.top().snd.snd) == mone.end())
+			mone[q.top().snd.snd] = {{q.top().snd.fst, Frac(g, 1ll << 25)}}; 
+		else
+			mone[q.top().snd.snd].push_back({q.top().snd.fst, Frac(g, 1ll << 25)});
 		vone.push_back({q.top().snd, Frac(g, 1ll << 25)});
 		q.pop();
+		++c;
 	}
 	puts("end of push");
 }
 
-Frac B[25];
+//Frac B[25];
+priority_queue<double, vector<double>, greater<double>> B[25];
 ll gammax[25], gammay[25];
+const int NB_APPROX = 1000;
 
-void compute_best_approx(int levelmax, int level = 1, Frac f = Frac(1, 1)) {
+//void compute_best_approx(int levelmax, int level = 1, Frac f = Frac(1, 1), bool nonnul = false) {
+void compute_best_approx(int levelmax, int level = 1, double f = 1., bool nonnul = false) {
 	if (level > levelmax)
 		return;
 	if (level <= 2) {
-		for (int i = int(vone.size()) - 1; int(vone.size()) - i < 1e3 && i >= 0; --i) {
-			if (level == 1 && i == int(vone.size()) - 1)
-				continue;
+		for (int i = int(vone.size()) - 1; int(vone.size()) - i < 1e4 && i >= 0; --i) {
+//			if (level == 1 && i == int(vone.size()) - 1)
+//				continue;
 
 			gammay[level] = vone[i].fst.snd;
 			gammax[level] = vone[i].fst.fst;
-			Frac ftot = f * vone[i].snd;
-			if (ftot * B[levelmax - level] * (1 << level) >= B[levelmax]) {
+//			Frac ftot = f * vone[i].snd;
+			double ftot = f * vone[i].snd.floatval();
+			if (ftot * B[levelmax - level].top() * (1 << level) >= B[levelmax].top()) {
 				if (level == levelmax) {
-					assert(B[levelmax - level] == Frac(1, 1));
+//					assert(B[levelmax - level] == Frac(1, 1));
 //					assert(ftot >= B[levelmax]);
-					B[levelmax] = max(B[levelmax], ftot * (1 << (levelmax - 1)));
+					if (nonnul || i != int(vone.size()) - 1) {
+						B[levelmax].push(ftot * (1 << (levelmax - 1)));
+						if (B[levelmax].size() > NB_APPROX)
+							B[levelmax].pop();
+					}
 				}
 				else
-					compute_best_approx(levelmax, level + 1, ftot);
+					compute_best_approx(levelmax, level + 1, ftot, nonnul || (i != int(vone.size() - 1)));
 			}
 		}
 		return;
@@ -390,17 +438,48 @@ void compute_best_approx(int levelmax, int level = 1, Frac f = Frac(1, 1)) {
 	gammay[level] = gammay[level - 2] ^ gammax[level - 1];
 	if (mone.find(gammay[level]) == mone.end())
 		return;
-	gammax[level] = mone[gammay[level]].fst;
-	Frac ftot = f * mone[gammay[level]].snd;
-	if (ftot * B[levelmax - level] * (1 << level) >= B[levelmax]) {
-		if (level == levelmax) {
-			assert(B[levelmax - level] == Frac(1, 1));
-//			assert(ftot >= B[levelmax]);
-			B[levelmax] = max(B[levelmax], ftot * (1 << (levelmax - 1)));
+	for (auto it: mone[gammay[level]]) {
+		gammax[level] = it.fst;
+//		Frac ftot = f * it.snd;
+		double ftot = f * it.snd.floatval();
+		if (ftot * B[levelmax - level].top() * (1 << level) >= B[levelmax].top()) {
+			if (level == levelmax) {
+//				assert(B[levelmax - level] == Frac(1, 1));
+//				assert(ftot >= B[levelmax]);
+				if (nonnul || gammay[level] != 0) {
+					B[levelmax].push(ftot * (1 << (levelmax - 1)));
+					if (B[levelmax].size() > NB_APPROX)
+						B[levelmax].pop();
+				}
+			}
+			else
+				compute_best_approx(levelmax, level + 1, ftot, nonnul || gammay[level] != 0);
 		}
-		else
-			compute_best_approx(levelmax, level + 1, ftot);
+//		return;
 	}
+}
+
+void printdoublepower2(double x) {
+	assert(0 <= x && x <= 1);
+	if (x == 0) {
+		printf("0");
+		return;
+	}
+	ll p = 1;
+	while ((1ll << (p + 1)) * x < 2)
+		p++;
+	printf("%.8f.2^-%lld", x * (1ll << p), p);
+}
+
+pair<double, double> lastpq(priority_queue<double, vector<double>, greater<double>> q) {
+	double cap = 0;
+	double l = q.top();
+	while (!q.empty()) {
+		l = q.top();
+		cap += l * l;
+		q.pop();
+	}
+	return {l, cap};
 }
 
 int main() {
@@ -408,14 +487,27 @@ int main() {
 	for (int i = 0; i < 8; ++i)
 		for (int mask = 0; mask < (1 << 8); ++mask)
 			compute_bias_sbox(i, mask);
-
+//	aone[0][(3 << 1) | (1 << 6)].fst.print();
+//	aone[1][3 << 2].fst.print();
+//	printf("%lld\n", (aone[0][(3 << 1) | (1 << 6)].fst * aone[1][3 << 2].fst).norm1());
+//	printf("%f\n", 0.5 + 2 * 1. * (aone[0][(3 << 1) | (1 << 6)].fst * aone[1][3 << 2].fst).norm1() / (4 * 4) / (1 << 6));
+//	return 0;
 	compute_best_approx_one();
-	B[0] = Frac(1, 1);
-	for (int level = 1; level <= 6; ++level) {
+//	B[0] = Frac(1, 1);
+	B[0].push(1);
+	for (int level = 1; level <= 16; ++level) {
+		for (int i = 0; i < NB_APPROX; ++i)
+			B[level].push(0);
+	}
+	for (int level = 1; level <= 16; ++level) {
 		compute_best_approx(level);
 		printf("Best bias for level %d = ", level);
-		B[level].printfloat();
-		puts("");
+		printdoublepower2(B[level].top());
+		printf(" ... ");
+		auto p = lastpq(B[level]);
+		printdoublepower2(p.fst);
+		printf(" | Capacity = %.6e\n", p.snd);
+//		B[level].printfloat();
 	}
 	return 0;
 }
