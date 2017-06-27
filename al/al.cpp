@@ -356,17 +356,18 @@ void compute_best_approx_one() {
 	sort(right.begin(), right.end());
 	puts("end of sorting");
 	vector<int> idleft, idright;
-	for (int it = 0; it < 32; ++it) {
-		// TODO: generate random vectors *on the sphere*
+	for (int it = 0; it < 256; ++it) {
 		vector<double> v(16);
 		double norm = 0;	
 		for (int i = 0; i < 16; ++i) {
-			v[i] = rand() - RAND_MAX / 2;
+//			v[i] = rand() - RAND_MAX / 2;
+			v[i] = sqrt(-2 * log((1. * rand() + 1) / (RAND_MAX + 2.))) * cos(2 * M_PI * (1. * rand() + 1) / (RAND_MAX + 2.));
 			norm += v[i] * v[i];
 		}
 		printf("got norm = %f\n", norm);
 		assert(norm != 0);
 		norm = sqrt(norm);
+		printf("Iteration %d: ", it + 1);
 		for (int i = 0; i < 16; ++i) {
 			v[i] /= norm;
 			printf("%f ", v[i]);
@@ -410,7 +411,7 @@ void compute_best_approx_one() {
 			auto r = right[j];
 			ll g = (l.fst * r.fst).trace();
 			q.push({llabs(g), {shiftrot((l.snd.fst << 16) | r.snd.fst), applyp((l.snd.snd << 16) | r.snd.snd)}});
-			if (q.size() > (1 << 24))
+			if (q.size() > (1 << 20))
 				q.pop();
 		}
 	}
@@ -453,7 +454,7 @@ void compute_best_approx_one() {
 //Frac B[25];
 priority_queue<double, vector<double>, greater<double>> B[25];
 ll gammax[25], gammay[25];
-const int NB_APPROX = 1000;
+const int NB_APPROX = 8000;
 
 //void compute_best_approx(int levelmax, int level = 1, Frac f = Frac(1, 1), bool nonnul = false) {
 void compute_best_approx(int levelmax, int level = 1, double f = 1., bool nonnul = false) {
@@ -532,7 +533,9 @@ pair<double, double> lastpq(priority_queue<double, vector<double>, greater<doubl
 }
 
 int main() {
-	srand(time(NULL));
+	time_t seed = time(NULL);
+	srand(seed);
+	printf("seed = %ld\n", seed);
 	for (int i = 0; i < 8; ++i)
 		for (int mask = 0; mask < (1 << 8); ++mask)
 			compute_bias_sbox(i, mask);
@@ -555,7 +558,7 @@ int main() {
 		printf(" ... ");
 		auto p = lastpq(B[level]);
 		printdoublepower2(p.fst);
-		printf(" | Capacity = %.6e\n", p.snd);
+		printf(" | Capacity = %.6e\n", 4 * p.snd);
 //		B[level].printfloat();
 	}
 	return 0;
