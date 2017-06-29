@@ -4,12 +4,15 @@
 #include <cstdlib>
 #include <map>
 #include <queue>
+#include <sys/time.h>
 #include <vector>
 using namespace std;
 #define fst first
 #define snd second
 #define mp make_pair
 typedef long long ll;
+typedef unsigned long long ull;
+typedef unsigned int uint;
 typedef pair<int, int> pii;
 typedef pair<ll, ll> pll;
 
@@ -112,7 +115,7 @@ struct Matrix {
 		int n = int(m.size());
 		for (int i = 0; i < n; ++i)
 			for (int j = 0; j < n; ++j)
-				ans += m[i][j];
+				ans += abs(m[i][j]); // here
 		return ans;
 	}
 
@@ -309,29 +312,71 @@ ll goal(vector<int> p) {
 	return m.trace();
 }
 
-void generate(vector<pair<Matrix, pll>>& v, Matrix m, ll in, ll out, int i, int imax, int c = 0) {
+const int NB_VECTORS = 32;
+priority_queue<pair<double, ull>, vector<pair<double, ull>>, greater<pair<double, ull>>> bestscal[2][NB_VECTORS];
+double vect[NB_VECTORS][16];
+struct timeval tstart, tnow;
+
+void generate(int side, Matrix m, uint in, uint out, int i, int imax, int c = 0) {
 	if (i >= imax) {
-		v.push_back({m, {in, out}});
+		for (int j = 0; j < NB_VECTORS; ++j) {
+			double ps = 0;
+			for (int k = 0; k < 4; ++k)
+				for (int l = 0; l < 4; ++l)
+					ps += m.m[k][l] * vect[j][4 * k + l];
+//			m.print();
+			bestscal[side][j].push({fabs(ps), (ull(out) << 32) | in});
+			if (int(bestscal[side][j].size()) > (1 << 10))
+				bestscal[side][j].pop();
+		}
 		return;
 	}
-	int upp = i == 0 || i == 4 ? 256 : (1 << 5);
-//	int upp = 1 << 4;
+//	int upp = i == 0 || i == 4 ? 256 : (1 << 4);
+//	int upp = i == 0 || i == 4 ? 256 : ((1 << 6) + (1 << 7));
+//	int upp = i == 0 || i == 4 ? 256 : (1 << 6);
+	int upp = 256;
 	for (int x = 0; x < upp; ++x) {
 		int p = aone[i][x].snd;
-		generate(v, m * aone[i][x].fst, (in << 4) | cut(p, 4), (out << 4) | (p >> 4), i + 1, imax, c + 1);
+		if (x > 0 && (i == 0 || i == 4)) {
+			gettimeofday(&tnow, NULL);
+			ull tnow_usec = tnow.tv_usec + 1000 * 1000ull * tnow.tv_sec;
+			ull tstart_usec = tstart.tv_usec + 1000 * 1000ull * tstart.tv_sec;
+			ull usec_per_it = (tnow_usec - tstart_usec) / (x + (side == 1 ? upp : 0));
+			ull it_rem = upp - x + (side == 0 ? upp : 0);
+			ull usec_rem = usec_per_it * it_rem;
+			ull sec_rem = usec_rem / 1000 / 1000;
+			ull min_rem = sec_rem / 60;
+			ull hour_rem = min_rem / 60;
+			printf("%d/%d estimated time remaining: %lluh%llum%llus\n", x, upp, hour_rem, min_rem % 60, sec_rem % 60);
+		}
+		generate(side, m * aone[i][x].fst, (in << 4) | cut(p, 4), (out << 4) | (p >> 4), i + 1, imax, c + 1);
 	}
 }
 
-map<ll, vector<pair<ll, Frac>>> mone;
-vector<pair<pll, Frac>> vone;
+Matrix recompute_matrix(int side, uint in, uint out) {
+	int first_box = side == 1 ? 7 : 3;
+	int last_box = side == 1 ? 4 : 0;
+	Matrix m(4);
+	for (int i = first_box; i >= last_box; --i) {
+		m = aone[i][cut(in, 4) | (cut(out, 4) << 4)].fst * m;	
+		in >>= 4;
+		out >>= 4;
+	}
+	return m;
+}
+
+map<uint, vector<pair<uint, Frac>>> mone;
+vector<pair<ull, Frac>> vone;
 
 ll shiftrot(ll x) {
 	return cut(x << 1, 32) | ((x >> 31) & 1);
 }
 
 void compute_best_approx_one() {
+	/*
 	for (int i = 0; i < 8; ++i)
 		sort(aone[i], aone[i] + (1 << 8), compare_aone);
+	*/
 	/*
 	for (int i = 0; i < (1 << 8); ++i) {
 		if (aone[0][i].snd == ((1 << 6) | (3 << 1))) {
@@ -348,128 +393,114 @@ void compute_best_approx_one() {
 		}
 	*/
 
-	vector<pair<Matrix, pll>> left, right;
-	generate(left, Matrix(4), 0, 0, 0, 4);
-	generate(right, Matrix(4), 0, 0, 4, 8);
-	puts("end of generation");
-	sort(left.begin(), left.end());
-	sort(right.begin(), right.end());
-	puts("end of sorting");
-	vector<int> idleft, idright;
-	for (int it = 0; it < 256; ++it) {
-		vector<double> v(16);
-		double norm = 0;	
-		for (int i = 0; i < 16; ++i) {
-//			v[i] = rand() - RAND_MAX / 2;
-			v[i] = sqrt(-2 * log((1. * rand() + 1) / (RAND_MAX + 2.))) * cos(2 * M_PI * (1. * rand() + 1) / (RAND_MAX + 2.));
-			norm += v[i] * v[i];
+	for (int i = 0; i < NB_VECTORS; ++i) {
+		double vnorm = 0;
+		for (int j = 0; j < 16; ++j) {
+			vect[i][j] = sqrt(-2 * log((1. * rand() + 1) / (RAND_MAX + 2.))) * cos(2 * M_PI * (1. * rand() + 1) / (RAND_MAX + 2.));
+			vnorm += vect[i][j] * vect[i][j];
 		}
-		printf("got norm = %f\n", norm);
-		assert(norm != 0);
-		norm = sqrt(norm);
-		printf("Iteration %d: ", it + 1);
-		for (int i = 0; i < 16; ++i) {
-			v[i] /= norm;
-			printf("%f ", v[i]);
-		}
-		puts(" generated");
-		vector<pair<double, int>> l;
-		for (int p = 0; p < int(left.size()); ++p) {
-			double ans = 0;
-			for (int i = 0; i < 4; ++i)
-				for (int j = 0; j < 4; ++j)
-					ans += left[p].fst.m[j][i] * v[4 * i + j];
-			l.push_back({fabs(ans), p});
-		}
-		sort(l.begin(), l.end(), greater<pair<double, int>>());
-		for (int i = 0; i < (1 << 10); ++i)
-			idleft.push_back(l[i].snd);
-		l.clear();
-		for (int p = 0; p < int(right.size()); ++p) {
-			double ans = 0;
-			for (int i = 0; i < 4; ++i)
-				for (int j = 0; j < 4; ++j)
-					ans += right[p].fst.m[i][j] * v[4 * i + j];
-			l.push_back({fabs(ans), p});
-		}
-		sort(l.begin(), l.end(), greater<pair<double, int>>());
-		for (int i = 0; i < (1 << 10); ++i)
-			idright.push_back(l[i].snd);
+		assert(vnorm > 0);
+		vnorm = sqrt(vnorm);
+		for (int j = 0; j < 16; ++j)
+			vect[i][j] /= vnorm;
 	}
-	sort(idleft.begin(), idleft.end());
-	sort(idright.begin(), idright.end());
-	printf("Size left = %d | Size right = %d\n", int(idleft.size()), int(idright.size()));
-	auto it = unique(idleft.begin(), idleft.end());
-	idleft.resize(distance(idleft.begin(), it));
-	it = unique(idright.begin(), idright.end());
-	idright.resize(distance(idright.begin(), it));
-	printf("Size left = %d | Size right = %d\n", int(idleft.size()), int(idright.size()));
-	priority_queue<pair<ll, pll>, vector<pair<ll, pll>>, greater<pair<ll, pll>>> q;
-	for (int i: idleft) {
-		auto l = left[i];
-		for (int j: idright) {
-			auto r = right[j];
-			ll g = (l.fst * r.fst).trace();
-			q.push({llabs(g), {shiftrot((l.snd.fst << 16) | r.snd.fst), applyp((l.snd.snd << 16) | r.snd.snd)}});
-			if (q.size() > (1 << 20))
-				q.pop();
+	puts("vectors generated");
+	for (int i = 0; i < 2; ++i)
+		generate(i, Matrix(4), 0, 0, 4 * i, 4 * (i + 1));
+	puts("representants chosen");
+	vector<pair<ull, Matrix>> sides[2];
+	for (int i = 0; i < NB_VECTORS; ++i) {
+		for (int side = 0; side < 2; ++side)
+			while (!bestscal[side][i].empty()) {
+				ull inout = bestscal[side][i].top().snd;
+				sides[side].push_back({inout, recompute_matrix(side, cut(inout, 32), inout >> 32)});
+				bestscal[side][i].pop();	
+			}
+	}
+	puts("left and right sides generated");
+	for (int i = 0; i < 2; ++i) {
+		sort(sides[i].begin(), sides[i].end());
+		auto it = unique(sides[i].begin(), sides[i].end());
+		sides[i].resize(distance(sides[i].begin(), it));
+		printf("Size %d = %d\n", i + 1, int(sides[i].size()));
+	}
+	priority_queue<pair<ll, ull>, vector<pair<ll, ull>>, greater<pair<ll, ull>>> q;
+	for (auto l: sides[0]) {
+		uint l_in = cut(l.fst, 32), l_out = l.fst >> 32;
+		for (auto m: sides[1]) {
+			uint m_in = cut(m.fst, 32), m_out = m.fst >> 32;
+//			for (int k: ids[2]) {
+//				auto n = sides[2][k];
+//				for (int s: ids[3]) {
+//					auto r = sides[3][s];
+					ll g = (l.snd * m.snd).trace();
+					q.push({llabs(g), shiftrot((l_in << 16) | m_in) | (applyp((l_out << 16)| m_out) << 32)});
+					if (q.size() > (1 << 25))
+						q.pop();
+//				}
+//			}
 		}
+//		printf("%f\n", 100. * i / sides[0].size());
 	}
 
 	puts("end of combining");
 	int c = 0;
 	while (!q.empty()) {
 		ll g = q.top().fst;
+		uint in = cut(q.top().snd, 32);
+		uint out = q.top().snd >> 32;
 		/*
-		print_bits(q.top().snd.fst, 32);
+		print_bits(in, 32);
 		puts("");
-		print_bits(q.top().snd.snd, 32);
+		print_bits(out, 32);
 		puts("");
 		printf("Bias = ");
 		Frac(g, 1ll << 25).printfloat();
 		puts("");
 		*/
-//		assert(mone.find(q.top().snd.snd) == mone.end());
-		if (q.top().snd.fst == ((1 << 15)) && q.top().snd.snd == ((1 << 7) | (1 << 18) | (1 << 24) | (1 << 29)))
+//		assert(mone.find(out) == mone.end());
+		if (in == ((1 << 15)) && out == ((1 << 7) | (1 << 18) | (1 << 24) | (1 << 29)))
 			printf("A here: %d\n", c);
-		if (q.top().snd.fst == ((1 << 27) | (1 << 28) | (1 << 30) | (1ll << 31)) && q.top().snd.snd == ((1 << 15)))
+		if (in == ((1 << 27) | (1 << 28) | (1 << 30) | (1ll << 31)) && out == ((1 << 15)))
 			printf("B here: %d\n", c);
-		if (q.top().snd.fst == ((1 << 29)) && q.top().snd.snd == ((1 << 15)))
+		if (in == ((1 << 29)) && out == ((1 << 15)))
 			printf("C here: %d\n", c);
-		if (q.top().snd.fst == ((1 << 15)) && q.top().snd.snd == ((1 << 7) | (1 << 18) | (1 << 24)))
+		if (in == ((1 << 15)) && out == ((1 << 7) | (1 << 18) | (1 << 24)))
 			printf("D here: %d\n", c);
-		if (q.top().snd.fst == ((1 << 12) | (1 << 16)) && q.top().snd.snd == ((1 << 7) | (1 << 18) | (1 << 24)))
+		if (in == ((1 << 12) | (1 << 16)) && out == ((1 << 7) | (1 << 18) | (1 << 24)))
 			printf("E here: %d\n", c);
-		if (mone.find(q.top().snd.snd) == mone.end())
-			mone[q.top().snd.snd] = {{q.top().snd.fst, Frac(g, 1ll << 25)}}; 
+		if (mone.find(out) == mone.end())
+			mone[out] = {{in, Frac(g, 1ll << 25)}}; 
 		else
-			mone[q.top().snd.snd].push_back({q.top().snd.fst, Frac(g, 1ll << 25)});
+			mone[out].push_back({in, Frac(g, 1ll << 25)});
 		vone.push_back({q.top().snd, Frac(g, 1ll << 25)});
 		q.pop();
 		++c;
 	}
+	for (auto& it: mone)
+		reverse(it.snd.begin(), it.snd.end());
 	puts("end of push");
 }
 
 //Frac B[25];
 priority_queue<double, vector<double>, greater<double>> B[25];
-ll gammax[25], gammay[25];
-const int NB_APPROX = 8000;
+uint gammax[25], gammay[25];
+const int NB_APPROX = 10000;
 
 //void compute_best_approx(int levelmax, int level = 1, Frac f = Frac(1, 1), bool nonnul = false) {
 void compute_best_approx(int levelmax, int level = 1, double f = 1., bool nonnul = false) {
 	if (level > levelmax)
 		return;
 	if (level <= 2) {
-		for (int i = int(vone.size()) - 1; int(vone.size()) - i < 1e4 && i >= 0; --i) {
+		for (int i = int(vone.size()) - 1; int(vone.size()) - i < 1e5 && i >= 0; --i) {
 //			if (level == 1 && i == int(vone.size()) - 1)
 //				continue;
 
-			gammay[level] = vone[i].fst.snd;
-			gammax[level] = vone[i].fst.fst;
+			gammay[level] = vone[i].fst >> 32;
+			gammax[level] = cut(vone[i].fst, 32);
 //			Frac ftot = f * vone[i].snd;
 			double ftot = f * vone[i].snd.floatval();
-			if (ftot * B[levelmax - level].top() * (1 << level) >= B[levelmax].top()) {
+			if (B[levelmax].size() < NB_APPROX || ftot * B[levelmax - level].top() * (1 << level) >= B[levelmax].top()) {
 				if (level == levelmax) {
 //					assert(B[levelmax - level] == Frac(1, 1));
 //					assert(ftot >= B[levelmax]);
@@ -492,7 +523,7 @@ void compute_best_approx(int levelmax, int level = 1, double f = 1., bool nonnul
 		gammax[level] = it.fst;
 //		Frac ftot = f * it.snd;
 		double ftot = f * it.snd.floatval();
-		if (ftot * B[levelmax - level].top() * (1 << level) >= B[levelmax].top()) {
+		if (B[levelmax].size() < NB_APPROX || ftot * B[levelmax - level].top() * (1 << level) >= B[levelmax].top()) {
 			if (level == levelmax) {
 //				assert(B[levelmax - level] == Frac(1, 1));
 //				assert(ftot >= B[levelmax]);
@@ -533,6 +564,7 @@ pair<double, double> lastpq(priority_queue<double, vector<double>, greater<doubl
 }
 
 int main() {
+	gettimeofday(&tstart, NULL);
 	time_t seed = time(NULL);
 	srand(seed);
 	printf("seed = %ld\n", seed);
@@ -547,11 +579,11 @@ int main() {
 	compute_best_approx_one();
 //	B[0] = Frac(1, 1);
 	B[0].push(1);
-	for (int level = 1; level <= 16; ++level) {
-		for (int i = 0; i < NB_APPROX; ++i)
-			B[level].push(0);
-	}
-	for (int level = 1; level <= 16; ++level) {
+//	for (int level = 1; level <= 16; ++level) {
+//		for (int i = 0; i < NB_APPROX; ++i)
+//			B[level].push(0);
+//	}
+	for (int level = 1; level <= 14; ++level) {
 		compute_best_approx(level);
 		printf("Best bias for level %d = ", level);
 		printdoublepower2(B[level].top());
