@@ -314,10 +314,11 @@ ll goal(vector<int> p) {
 
 const int NB_VECTORS = 32;
 priority_queue<pair<double, ull>, vector<pair<double, ull>>, greater<pair<double, ull>>> bestscal[2][NB_VECTORS];
+pthread_mutex_t bestscal_m;
 double vect[NB_VECTORS][16];
 struct timeval tstart, tnow;
 
-void generate(int side, Matrix m, uint in, uint out, int i, int imax, int c = 0) {
+void generate(int side, Matrix m, uint in, uint out, int i, int imax, bool print, int c = 0) {
 	if (i >= imax) {
 		for (int j = 0; j < NB_VECTORS; ++j) {
 			double ps = 0;
@@ -325,9 +326,11 @@ void generate(int side, Matrix m, uint in, uint out, int i, int imax, int c = 0)
 				for (int l = 0; l < 4; ++l)
 					ps += m.m[k][l] * vect[j][4 * k + l];
 //			m.print();
+			pthread_mutex_lock(&bestscal_m);
 			bestscal[side][j].push({fabs(ps), (ull(out) << 32) | in});
-			if (int(bestscal[side][j].size()) > (1 << 10))
+			if (int(bestscal[side][j].size()) > (1 << 12))
 				bestscal[side][j].pop();
+			pthread_mutex_unlock(&bestscal_m);
 		}
 		return;
 	}
@@ -337,20 +340,27 @@ void generate(int side, Matrix m, uint in, uint out, int i, int imax, int c = 0)
 	int upp = 256;
 	for (int x = 0; x < upp; ++x) {
 		int p = aone[i][x].snd;
-		if (x > 0 && (i == 0 || i == 4)) {
+		if (x > 0 && print) {
 			gettimeofday(&tnow, NULL);
 			ull tnow_usec = tnow.tv_usec + 1000 * 1000ull * tnow.tv_sec;
 			ull tstart_usec = tstart.tv_usec + 1000 * 1000ull * tstart.tv_sec;
-			ull usec_per_it = (tnow_usec - tstart_usec) / (x + (side == 1 ? upp : 0));
-			ull it_rem = upp - x + (side == 0 ? upp : 0);
+			ull usec_per_it = (tnow_usec - tstart_usec) / x;
+			ull it_rem = upp - x;
 			ull usec_rem = usec_per_it * it_rem;
 			ull sec_rem = usec_rem / 1000 / 1000;
 			ull min_rem = sec_rem / 60;
 			ull hour_rem = min_rem / 60;
 			printf("%d/%d estimated time remaining: %lluh%llum%llus\n", x, upp, hour_rem, min_rem % 60, sec_rem % 60);
 		}
-		generate(side, m * aone[i][x].fst, (in << 4) | cut(p, 4), (out << 4) | (p >> 4), i + 1, imax, c + 1);
+		generate(side, m * aone[i][x].fst, (in << 4) | cut(p, 4), (out << 4) | (p >> 4), i + 1, imax, false, c + 1);
 	}
+}
+
+void *generate_multi(void *arg) {
+	int side = *(int *)arg;
+	generate(side, Matrix(4), 0, 0, 4 * side, 4 * (side + 1), side == 0);
+//	pthread_exit(NULL);
+	return NULL;
 }
 
 Matrix recompute_matrix(int side, uint in, uint out) {
@@ -376,11 +386,9 @@ void compute_best_approx_one() {
 	/*
 	for (int i = 0; i < 8; ++i)
 		sort(aone[i], aone[i] + (1 << 8), compare_aone);
-	*/
-	/*
 	for (int i = 0; i < (1 << 8); ++i) {
-		if (aone[0][i].snd == ((1 << 6) | (3 << 1))) {
-			printf("position %d\n", i);
+		if (aone[2][i].snd == 0) {
+			aone[0][i].fst.print();
 			break;
 		}
 	}
@@ -405,8 +413,19 @@ void compute_best_approx_one() {
 			vect[i][j] /= vnorm;
 	}
 	puts("vectors generated");
+	pthread_mutex_init(&bestscal_m, NULL);
+	pthread_t tid[2];
+	int args[2];
+	for (int i = 0; i < 2; ++i) {
+		args[i] = i;
+		pthread_create(&tid[i], NULL, generate_multi, &args[i]);
+		generate_multi(&args[i]);
+	}
+	/*
 	for (int i = 0; i < 2; ++i)
-		generate(i, Matrix(4), 0, 0, 4 * i, 4 * (i + 1));
+		pthread_join(tid[i], NULL);
+	*/
+	pthread_mutex_destroy(&bestscal_m);
 	puts("representants chosen");
 	vector<pair<ull, Matrix>> sides[2];
 	for (int i = 0; i < NB_VECTORS; ++i) {
@@ -435,7 +454,7 @@ void compute_best_approx_one() {
 //					auto r = sides[3][s];
 					ll g = (l.snd * m.snd).trace();
 					q.push({llabs(g), shiftrot((l_in << 16) | m_in) | (applyp((l_out << 16)| m_out) << 32)});
-					if (q.size() > (1 << 25))
+					if (q.size() > (1 << 26))
 						q.pop();
 //				}
 //			}
@@ -485,7 +504,7 @@ void compute_best_approx_one() {
 //Frac B[25];
 priority_queue<double, vector<double>, greater<double>> B[25];
 uint gammax[25], gammay[25];
-const int NB_APPROX = 10000;
+const int NB_APPROX = 20000;
 
 //void compute_best_approx(int levelmax, int level = 1, Frac f = Frac(1, 1), bool nonnul = false) {
 void compute_best_approx(int levelmax, int level = 1, double f = 1., bool nonnul = false) {
