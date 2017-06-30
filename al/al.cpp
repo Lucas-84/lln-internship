@@ -313,12 +313,13 @@ ll goal(vector<int> p) {
 }
 
 const int NB_VECTORS = 32;
-priority_queue<pair<double, ull>, vector<pair<double, ull>>, greater<pair<double, ull>>> bestscal[2][NB_VECTORS];
-pthread_mutex_t bestscal_m;
+//priority_queue<pair<double, ull>, vector<pair<double, ull>>, greater<pair<double, ull>>> bestscal[2][NB_VECTORS];
+priority_queue<pair<double, ull>> bestscal[2][NB_VECTORS];
+//pthread_mutex_t bestscal_m;
 double vect[NB_VECTORS][16];
 struct timeval tstart, tnow;
 
-void generate(int side, Matrix m, uint in, uint out, int i, int imax, bool print, int c = 0) {
+void generate(int side, Matrix m, uint in, uint out, int i, int imax) {
 	if (i >= imax) {
 		for (int j = 0; j < NB_VECTORS; ++j) {
 			double ps = 0;
@@ -326,42 +327,44 @@ void generate(int side, Matrix m, uint in, uint out, int i, int imax, bool print
 				for (int l = 0; l < 4; ++l)
 					ps += m.m[k][l] * vect[j][4 * k + l];
 //			m.print();
-			pthread_mutex_lock(&bestscal_m);
-			bestscal[side][j].push({fabs(ps), (ull(out) << 32) | in});
-			if (int(bestscal[side][j].size()) > (1 << 12))
+//			pthread_mutex_lock(&bestscal_m);
+			bestscal[side][j].push({-fabs(ps), (ull(out) << 32) | in});
+			if (int(bestscal[side][j].size()) > (1 << 11))
 				bestscal[side][j].pop();
-			pthread_mutex_unlock(&bestscal_m);
+//			pthread_mutex_unlock(&bestscal_m);
 		}
 		return;
 	}
-//	int upp = i == 0 || i == 4 ? 256 : (1 << 3);
+//	int upp = i == 0 || i == 4 ? 256 : (1 << 5);
 //	int upp = i == 0 || i == 4 ? 256 : ((1 << 6) + (1 << 7));
 //	int upp = i == 0 || i == 4 ? 256 : (1 << 6);
 	int upp = 256;
 	for (int x = 0; x < upp; ++x) {
 		int p = aone[i][x].snd;
-		if (x > 0 && print) {
+		if (x > 0 && (i == 0 || i == 4)) {
 			gettimeofday(&tnow, NULL);
 			ull tnow_usec = tnow.tv_usec + 1000 * 1000ull * tnow.tv_sec;
 			ull tstart_usec = tstart.tv_usec + 1000 * 1000ull * tstart.tv_sec;
-			ull usec_per_it = (tnow_usec - tstart_usec) / x;
-			ull it_rem = upp - x;
+			ull usec_per_it = (tnow_usec - tstart_usec) / (x + (side == 1 ? upp : 0));
+			ull it_rem = upp - x + (side == 0 ? upp : 0);
 			ull usec_rem = usec_per_it * it_rem;
 			ull sec_rem = usec_rem / 1000 / 1000;
 			ull min_rem = sec_rem / 60;
 			ull hour_rem = min_rem / 60;
 			printf("%d/%d estimated time remaining: %lluh%llum%llus\n", x, upp, hour_rem, min_rem % 60, sec_rem % 60);
 		}
-		generate(side, m * aone[i][x].fst, (in << 4) | cut(p, 4), (out << 4) | (p >> 4), i + 1, imax, false, c + 1);
+		generate(side, m * aone[i][x].fst, (in << 4) | cut(p, 4), (out << 4) | (p >> 4), i + 1, imax);
 	}
 }
 
+/*
 void *generate_multi(void *arg) {
 	int side = *(int *)arg;
 	generate(side, Matrix(4), 0, 0, 4 * side, 4 * (side + 1), side == 0);
-	pthread_exit(NULL);
+//	pthread_exit(NULL);
 	return NULL;
 }
+*/
 
 Matrix recompute_matrix(int side, uint in, uint out) {
 	int first_box = side == 1 ? 7 : 3;
@@ -412,33 +415,36 @@ void compute_best_approx_one() {
 			vect[i][j] /= vnorm;
 	}
 	puts("vectors generated");
-	pthread_mutex_init(&bestscal_m, NULL);
-	pthread_t tid[2];
-	int args[2];
+//	pthread_mutex_init(&bestscal_m, NULL);
+//	pthread_t tid[2];
+//	int args[2];
 	for (int i = 0; i < 2; ++i) {
-		args[i] = i;
-		pthread_create(&tid[i], NULL, generate_multi, &args[i]);
+//		args[i] = i;
+//		pthread_create(&tid[i], NULL, generate_multi, &args[i]);
 //		generate_multi(&args[i]);
+		generate(i, Matrix(4), 0, 0, 4 * i, 4 * (i + 1));
 	}
-	for (int i = 0; i < 2; ++i)
-		pthread_join(tid[i], NULL);
-	pthread_mutex_destroy(&bestscal_m);
+//	for (int i = 0; i < 2; ++i)
+//		pthread_join(tid[i], NULL);
+//	pthread_mutex_destroy(&bestscal_m);
 	puts("representants chosen");
 	vector<pair<ull, Matrix>> sides[2];
-	for (int i = 0; i < NB_VECTORS; ++i) {
-		for (int side = 0; side < 2; ++side)
+	for (int side = 0; side < 2; ++side) {
+		for (int i = 0; i < NB_VECTORS; ++i) {
 			while (!bestscal[side][i].empty()) {
 				ull inout = bestscal[side][i].top().snd;
 				sides[side].push_back({inout, recompute_matrix(side, cut(inout, 32), inout >> 32)});
 				bestscal[side][i].pop();	
 			}
+		}
 	}
 	puts("left and right sides generated");
 	for (int i = 0; i < 2; ++i) {
 		sort(sides[i].begin(), sides[i].end());
+		printf("Before size %d = %d\n", i + 1, int(sides[i].size()));
 		auto it = unique(sides[i].begin(), sides[i].end());
 		sides[i].resize(distance(sides[i].begin(), it));
-		printf("Size %d = %d\n", i + 1, int(sides[i].size()));
+		printf("After size %d = %d\n", i + 1, int(sides[i].size()));
 	}
 	priority_queue<pair<ll, ull>, vector<pair<ll, ull>>, greater<pair<ll, ull>>> q;
 	for (auto l: sides[0]) {
