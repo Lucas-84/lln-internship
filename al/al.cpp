@@ -334,7 +334,7 @@ void generate(int side, Matrix m, uint in, uint out, int i, int imax, bool print
 		}
 		return;
 	}
-//	int upp = i == 0 || i == 4 ? 256 : (1 << 4);
+//	int upp = i == 0 || i == 4 ? 256 : (1 << 3);
 //	int upp = i == 0 || i == 4 ? 256 : ((1 << 6) + (1 << 7));
 //	int upp = i == 0 || i == 4 ? 256 : (1 << 6);
 	int upp = 256;
@@ -359,7 +359,7 @@ void generate(int side, Matrix m, uint in, uint out, int i, int imax, bool print
 void *generate_multi(void *arg) {
 	int side = *(int *)arg;
 	generate(side, Matrix(4), 0, 0, 4 * side, 4 * (side + 1), side == 0);
-//	pthread_exit(NULL);
+	pthread_exit(NULL);
 	return NULL;
 }
 
@@ -400,7 +400,6 @@ void compute_best_approx_one() {
 			swap(aone[i][j], aone[i][k]);
 		}
 	*/
-
 	for (int i = 0; i < NB_VECTORS; ++i) {
 		double vnorm = 0;
 		for (int j = 0; j < 16; ++j) {
@@ -419,12 +418,10 @@ void compute_best_approx_one() {
 	for (int i = 0; i < 2; ++i) {
 		args[i] = i;
 		pthread_create(&tid[i], NULL, generate_multi, &args[i]);
-		generate_multi(&args[i]);
+//		generate_multi(&args[i]);
 	}
-	/*
 	for (int i = 0; i < 2; ++i)
 		pthread_join(tid[i], NULL);
-	*/
 	pthread_mutex_destroy(&bestscal_m);
 	puts("representants chosen");
 	vector<pair<ull, Matrix>> sides[2];
