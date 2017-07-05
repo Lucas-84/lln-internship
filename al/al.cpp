@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <map>
 #include <queue>
+#include <set>
 #include <sys/time.h>
 #include <vector>
 using namespace std;
@@ -329,7 +330,7 @@ void generate(int side, Matrix m, uint in, uint out, int i, int imax) {
 //			m.print();
 //			pthread_mutex_lock(&bestscal_m);
 			bestscal[side][j].push({-fabs(ps), (ull(out) << 32) | in});
-			if (int(bestscal[side][j].size()) > (1 << 11))
+			if (int(bestscal[side][j].size()) > (1 << 10))
 				bestscal[side][j].pop();
 //			pthread_mutex_unlock(&bestscal_m);
 		}
@@ -352,6 +353,7 @@ void generate(int side, Matrix m, uint in, uint out, int i, int imax) {
 			ull min_rem = sec_rem / 60;
 			ull hour_rem = min_rem / 60;
 			printf("%d/%d estimated time remaining: %lluh%llum%llus\n", x, upp, hour_rem, min_rem % 60, sec_rem % 60);
+			fflush(stdout);
 		}
 		generate(side, m * aone[i][x].fst, (in << 4) | cut(p, 4), (out << 4) | (p >> 4), i + 1, imax);
 	}
@@ -415,6 +417,7 @@ void compute_best_approx_one() {
 			vect[i][j] /= vnorm;
 	}
 	puts("vectors generated");
+	fflush(stdout);
 //	pthread_mutex_init(&bestscal_m, NULL);
 //	pthread_t tid[2];
 //	int args[2];
@@ -457,7 +460,7 @@ void compute_best_approx_one() {
 //					auto r = sides[3][s];
 					ll g = (l.snd * m.snd).trace();
 					q.push({llabs(g), shiftrot((l_in << 16) | m_in) | (applyp((l_out << 16)| m_out) << 32)});
-					if (q.size() > (1 << 26))
+					if (q.size() > (1 << 29))
 						q.pop();
 //				}
 //			}
@@ -506,15 +509,16 @@ void compute_best_approx_one() {
 
 //Frac B[25];
 priority_queue<double, vector<double>, greater<double>> B[25];
+set<pair<double, vector<ull>>> res_all;
 uint gammax[25], gammay[25];
-const int NB_APPROX = 20000;
+const int NB_APPROX = 10000;
 
 //void compute_best_approx(int levelmax, int level = 1, Frac f = Frac(1, 1), bool nonnul = false) {
 void compute_best_approx(int levelmax, int level = 1, double f = 1., bool nonnul = false) {
 	if (level > levelmax)
 		return;
 	if (level <= 2) {
-		for (int i = int(vone.size()) - 1; int(vone.size()) - i < 1e5 && i >= 0; --i) {
+		for (int i = int(vone.size()) - 1; int(vone.size()) - i < 8e5 && i >= 0; --i) {
 //			if (level == 1 && i == int(vone.size()) - 1)
 //				continue;
 
@@ -549,10 +553,24 @@ void compute_best_approx(int levelmax, int level = 1, double f = 1., bool nonnul
 			if (level == levelmax) {
 //				assert(B[levelmax - level] == Frac(1, 1));
 //				assert(ftot >= B[levelmax]);
+				double score = ftot * (1 << (levelmax - 1));
 				if (nonnul || gammay[level] != 0) {
-					B[levelmax].push(ftot * (1 << (levelmax - 1)));
-					if (B[levelmax].size() > NB_APPROX)
+					if (level == 14) {
+						vector<ull> v(14);
+						for (int i = 1; i <= 14; ++i)
+							v[i - 1] = (ull(gammay[i]) << 32) | gammax[i];
+						res_all.insert({score, v});
+					}
+					B[levelmax].push(score);
+					if (B[levelmax].size() > NB_APPROX) {
+						double s = B[levelmax].top();
+						if (level == 14) {
+							auto it_fst = res_all.lower_bound({s, vector<ull>(0)});	
+							assert(it_fst != res_all.end());
+							res_all.erase(it_fst);	
+						}
 						B[levelmax].pop();
+					}
 				}
 			}
 			else
@@ -614,6 +632,15 @@ int main() {
 		printdoublepower2(p.fst);
 		printf(" | Capacity = %.6e\n", 4 * p.snd);
 //		B[level].printfloat();
+		fflush(stdout);
 	}
+	FILE *fp = fopen("approx", "a");
+	for (auto it: res_all) {
+		fprintf(fp, "%.20e ", it.fst);
+		for (ull x: it.snd)
+			fprintf(fp, "%llu ", x);
+		fprintf(fp, "\n");
+	}
+	fclose(fp);
 	return 0;
 }
