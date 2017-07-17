@@ -142,9 +142,9 @@ ll cut(ll x, ll n) {
 	return x & ((1ll << n) - 1);
 }
 
-void print_bits(ll x, int n) {
+void print_bits(ull x, int n) {
 	for (int i = n - 1; i >= 0; --i) {
-		printf("%lld", (x >> i) & 1);
+		printf("%llu", (x >> i) & 1);
 		if ((n - i) % 4 == 0)
 			printf(" ");
 	}
@@ -157,19 +157,6 @@ vector<int> get_com_pos(int sbox1, int sbox2) {
 		for (int j = 0; j < 6; ++j)
 			if (E[6 * sbox1 + i] == E[6 * sbox2 + j])
 				ans.push_back(6 - i - 1);
-	return ans;
-}
-
-int merge_bits(vector<int> com_pos, int rem_val, int com_val, int nb_bits) {
-	int p = 1;
-	int ans = 0;
-	for (int i = 0; i < nb_bits; ++i) {
-		bool rem = find(com_pos.begin(), com_pos.end(), i) == com_pos.end(); 
-		int& val = rem ? rem_val : com_val;
-		ans += p * (val % 2);
-		val /= 2;
-		p *= 2;
-	}
 	return ans;
 }
 
@@ -199,7 +186,7 @@ ull shiftrot_right(ull x, int shift, int nb_bits) {
 	return ans;
 }
 
-int xor_all(int x) {
+ull xor_all(ull x) {
 	int ans = 0;
 	while (x > 0) {
 		ans ^= (x % 2);
@@ -285,10 +272,10 @@ void test() {
 }
 
 // number of plaintext/ciphertext couples
-const ull N = 1 << 22;
-const int L = 12;
-const int M = 10;
-const int LEVEL = 6;
+const ull N = 1 << 30;
+const int L = 18;
+const int M = 6;
+const int LEVEL = 14;
 //vector<pair<double, <ull>>> approx[8];
 
 ull one(int nb_bits) {
@@ -306,9 +293,11 @@ int popcount(ull x) {
 
 vector<pair<double, vector<ull>>> approxs;
 map<pair<ull, ull>, vector<int>> mmask;
+vector<pair<ull, vector<int>>> vmask;
 
 void extract() {
-	FILE *fp = fopen("approx6", "r");
+//	FILE *fp = fopen("approx6", "r");
+	FILE *fp = fopen("approx", "r");
 	assert(fp != NULL);
 	char line[1024];
 	map<vector<ull>, double> mapprox;
@@ -350,16 +339,18 @@ void extract() {
 			key_mask_out = (key_mask_out << 6) | lmask;
 		}
 		key_mask_out = do_inv_perm(key_mask_out, PC2, 48, 56);
-		assert(rotkey_left(rotkey_right(key_mask_out, 14), 14) == key_mask_out);
-		key_mask_out = rotkey_right(key_mask_out, 14); // delete for LEVEL == 14
-//		ull key_mask = key_mask_in | key_mask_out;
-//		if (popcount(key_mask) <= L) {
-		if (fabs(score - 3.81e-3) <= 1e-4) {
-			approxs.push_back({score, mask});
-			auto key_pair = make_pair(key_mask_in, key_mask_out);
-			if (mmask.find(key_pair) == mmask.end())
-				mmask[key_pair] = vector<int>(0);
-			mmask[key_pair].push_back(int(approxs.size()) - 1);
+//		assert(rotkey_left(rotkey_right(key_mask_out, 14), 14) == key_mask_out);
+//		key_mask_out = rotkey_right(key_mask_out, 14); // delete for LEVEL == 14
+		ull key_mask = key_mask_in | key_mask_out;
+		if (popcount(key_mask) <= L) {
+//			if (fabs(score - 9.53e-4) <= 1e-5) {
+//			if (fabs(score - 3.81e-3) <= 1e-4) {
+				approxs.push_back({score, mask});
+				auto key_pair = make_pair(key_mask_in, key_mask_out);
+				if (mmask.find(key_pair) == mmask.end())
+					mmask[key_pair] = vector<int>(0);
+				mmask[key_pair].push_back(int(approxs.size()) - 1);
+//			}
 			/*
 			printf("%e ", score);
 			puts("");
@@ -430,15 +421,20 @@ ull empty_with_mask(ull mask, ull val, int nb_bits) {
 	return ans;
 }
 
-int F[1 << L][1 << M];
+vector<int> F[1 << L];
+vector<bool> retpath;
+vector<bool> isinpath;
 
 void break_cipher() {
-	for (auto it: mmask) {
-		auto key_mask = it.fst.fst | it.fst.snd;
+	for (int _i = 0; _i < int(vmask.size()); ++_i) {
+		if (!isinpath[_i])
+			continue;
+		auto it = vmask[_i];
+		auto key_mask = it.fst;
 		// on-line phase of Matsui's alg 2 in multiple dimension
-		for (int i = 0; i < (1 << L); ++i)
-			fill(F[i], F[i] + (1 << M), 0);
 		int m = min(M, int(it.snd.size()));
+		for (int i = 0; i < (1 << L); ++i)
+			F[i] = vector<int>(1 << m);
 		vector<uint> mask_pl(m), mask_ph(m), mask_cl(m), mask_ch(m);
 		for (int j = 0; j < m; ++j) {
 			mask_pl[j] = cut(approxs[it.snd[j]].snd[0], 32) ^ (approxs[it.snd[j]].snd[1] >> 32);
@@ -454,17 +450,11 @@ void break_cipher() {
 			ull X = rand64();
 			ull Y = swap_halves(encrypt(X, key, LEVEL + 2));
 			vector<uint> v;
-			ull mph = 0, mpl = 0, mch = 0, mcl = 0;
+			ull mpl = 0, mcl = 0;
 			for (int j = 0; j < m; ++j) {
-				mph |= mask_ph[j];
 				mpl |= mask_pl[j];
-				mch |= mask_ch[j];
 				mcl |= mask_cl[j];
 			}
-			v.push_back(cut(X, 32) & mph);
-			v.push_back((X >> 32) & mpl);
-			v.push_back((Y >> 32) & mcl);
-			v.push_back(cut(Y, 32) & mch);
 			mpl = do_inv_perm(mpl, P, 32, 32);
 			ull mx = 0;
 			for (int i = 7; i >= 0; --i) {
@@ -479,17 +469,32 @@ void break_cipher() {
 				my = (my << 6) | lmask;
 			}
 			v.push_back(do_inv_perm(my, E, 48, 32) & cut(Y, 32)); // pareil
+			for (int j = 0; j < m; ++j)
+				v.push_back(xor_all(
+					(cut(X, 32) & mask_ph[j]) ^
+					((X >> 32) & mask_pl[j]) ^
+					((Y >> 32) & mask_cl[j]) ^
+					(cut(Y, 32) & mask_ch[j])
+				));
+//			printf("get %llu %llu\n", (X >> 32) & mask_pl[0], (Y >> 32) & mask_cl[0]);
 			if (pairtr.find(v) == pairtr.end()) pairtr[v] = 0;
 			pairtr[v]++;
-//			for (ull _k = 0; _k < (1ull << popcount(key_mask)); ++_k) {
-			for (int _it = 0; _it < 2; ++_it)  {
-				ull _k = _it == 0 ? real_k : rand_k;
+		}
+		printf("End of pairs gen: size = %d\n", int(pairtr.size()));
+		printf("Nb iterations = %llu\n", ull(pairtr.size()) * (1ull << popcount(key_mask)));
+		ull s = 0;
+		for (auto tr: pairtr) {
+			s += tr.snd;
+			for (ull _k = 0; _k < (1ull << popcount(key_mask)); ++_k) {
+//			for (int _it = 0; _it < 2; ++_it) {
+//				ull _k = _it == 0 ? real_k : rand_k;
 //				ull k = _it == 0 ? key : fill_with_mask(key_mask, _k, 56);
 				ull k = fill_with_mask(key_mask, _k, 56);
-				ull x = F_func(cut(X, 32), rotkey_left(k, 1));
-				ull y = F_func(cut(Y, 32), rotkey_left(k, 14)); // change when LEVEL = 14
-				ull xp = F_func(v[4], rotkey_left(k, 1));
-				ull yp = F_func(v[5], rotkey_left(k, 14));
+//				ull x = F_func(cut(X, 32), rotkey_left(k, 1));
+//				ull y = F_func(cut(Y, 32), rotkey_left(k, 14)); // change when LEVEL = 14
+				ull xp = F_func(tr.fst[0], rotkey_left(k, 1));
+//				ull yp = F_func(tr.fst[1], rotkey_left(k, 14));
+				ull yp = F_func(tr.fst[1], k);
 //				assert(encrypt((cut(X, 32) << 32) | (x ^ (X >> 32)), rotkey_left(k, 1), LEVEL + 2, 2) == swap_halves(Y));
 				/*
 				assert(encrypt(encrypt(X, key, 1), rotkey_left(key, 1), 4, 2) == encrypt(X, key, 4));
@@ -517,17 +522,18 @@ void break_cipher() {
 					*/
 //					assert((mask_cl & encrypt(0, rotkey_left(key, 13), 1)) == (mask_cl & encrypt(0, rotkey_left(k, 13), 1)));
 //					assert((mask_cl & (y ^ (Y >> 32))) == (mask_cl & encrypt(Y, rotkey_left(k, 13), 1)));
+					/*
 					assert((mask_pl[j] & x) == (mask_pl[j] & xp));
 					assert((mask_pl[j] & (X >> 32)) == (mask_pl[j] & v[1]));
 					assert((mask_ph[j] & cut(X, 32)) == (mask_ph[j] & v[0]));
 					assert((mask_cl[j] & y) == (mask_cl[j] & yp));
 					assert((mask_cl[j] & (Y >> 32)) == (mask_cl[j] & v[2]));
 					assert((mask_ch[j] & cut(Y, 32)) == (mask_ch[j] & v[3]));
+					*/
 					eta = (eta << 1) | xor_all(
-						(mask_pl[j] & (x ^ (X >> 32))) ^
-						(mask_ph[j] & cut(X, 32)) ^
-						(mask_cl[j] & (y ^ (Y >> 32))) ^
-						(mask_ch[j] & cut(Y, 32))
+						tr.fst[2 + j] ^
+						(mask_pl[j] & xp) ^
+						(mask_cl[j] & yp)
 					);
 					/*
 					eta |= xor_all(
@@ -538,14 +544,18 @@ void break_cipher() {
 					) << j;
 					*/
 				}
-				F[_k][eta]++;
+				F[_k][eta] += tr.snd;
 			}
-			if (i % 1000 == 0) {
-				printf("%d %.10e\n", F[real_k][0], 1. * F[real_k][0] / (i + 1) - 1. / (1 << m));
-				printf("%d %.10e\n", F[rand_k][0], 1. * F[rand_k][0] / (i + 1) - 1. / (1 << m));
+	//		if (i % 1000 == 0) {
+			/*
+				printf("s = %llu\n", s);
+				printf("%d %d %.10e\n", F[real_k][0], F[real_k][1], 1. * F[real_k][0] / s - 1. / (1 << m));
+				printf("%d %d %.10e\n", F[rand_k][0], F[rand_k][1], 1. * F[rand_k][0] / s - 1. / (1 << m));
 				puts("");
-			}
+			*/
+	//		}
 		}
+		puts("end of online phase");
 		// off-line phase of alg 2 using khi^2-method
 		vector<pair<double, ull>> S;
 		for (ull k = 0; k < (1ull << popcount(key_mask)); ++k) {
@@ -579,6 +589,30 @@ void break_cipher() {
 	}
 }
 
+
+int maxpop;
+ull posmax;
+
+void max_indep(int i = 0, ull mask = 0) {
+	if (i >= int(vmask.size())) {
+		int pop = popcount(mask);
+		if (pop > maxpop) {
+			maxpop = pop;
+			posmax = mask;
+			print_bits(mask, 56); puts("");
+			printf("pop = %d\n", pop);
+			isinpath = retpath;
+		}
+		return;
+	}
+	if ((mask & vmask[i].fst) == 0) {
+		retpath[i] = true;
+		max_indep(i + 1, mask | vmask[i].fst);
+	}
+	retpath[i] = false;
+	max_indep(i + 1, mask);
+}
+
 int main() {
 	time_t seed = time(NULL);
 	printf("seed = %u\n", (unsigned)seed);
@@ -586,6 +620,11 @@ int main() {
 	assert(RAND_MAX == INT_MAX);
 	key = rand() + ((1ull * rand() % (1 << 24)) << 32);
 	extract();
+	for (auto it: mmask)
+		vmask.push_back({it.fst.fst | it.fst.snd, it.snd});
+	retpath = vector<bool>(vmask.size());
+	isinpath = vector<bool>(vmask.size(), true);
+//	max_indep();
 	break_cipher();
 	return 0;
 }
