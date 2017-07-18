@@ -18,6 +18,8 @@ typedef unsigned int uint;
 typedef pair<int, int> pii;
 typedef pair<ll, ll> pll;
 
+//#define USE_LLR
+
 const int NB_SBOXES = 8;
 
 const int E[48] = {
@@ -272,10 +274,10 @@ void test() {
 }
 
 // number of plaintext/ciphertext couples
-const ull N = 1 << 30;
-const int L = 18;
+const ull N = 1ull << 32;
+const int L = 14;
 const int M = 6;
-const int LEVEL = 14;
+const int LEVEL = 6;
 //vector<pair<double, <ull>>> approx[8];
 
 ull one(int nb_bits) {
@@ -295,9 +297,21 @@ vector<pair<double, vector<ull>>> approxs;
 map<pair<ull, ull>, vector<int>> mmask;
 vector<pair<ull, vector<int>>> vmask;
 
+void printdoublepower2(double x) {
+	assert(0 <= x && x <= 1);
+	if (x == 0) {
+			printf("0");
+			return;
+	}
+	ll p = 1;
+	while ((1ll << (p + 1)) * x < 2)
+		p++;
+	printf("%.8f.2^-%lld", x * (1ll << p), p);
+}
+
 void extract() {
 //	FILE *fp = fopen("approx6", "r");
-	FILE *fp = fopen("approx", "r");
+	FILE *fp = fopen("approx6", "r");
 	assert(fp != NULL);
 	char line[1024];
 	map<vector<ull>, double> mapprox;
@@ -375,7 +389,9 @@ void extract() {
 		});
 		*/
 		// std::unique ?
-		printf("-> %d %e\n", int(it.snd.size()), approxs[it.snd[0]].fst);
+		printf("-> %d ", int(it.snd.size()));
+		printdoublepower2(approxs[it.snd[0]].fst);
+		puts("");
 		/*
 		for (int x: it.snd) {
 			print_bits(approxs[x].snd[0], 64);
@@ -444,7 +460,9 @@ void break_cipher() {
 		}
 		ull real_k = empty_with_mask(key_mask, key, 56);
 		ull rand_k = rand() % (1ull << popcount(key_mask));
-		printf("%llu %llu %d\n", N, 1ull << popcount(key_mask), m);
+		printf("%llu %llu %d ", N, 1ull << popcount(key_mask), m);
+		printdoublepower2(approxs[it.snd[0]].fst);
+		puts("");
 		map<vector<uint>, int> pairtr;
 		for (ull i = 0; i < N; ++i) {
 			ull X = rand64();
@@ -479,6 +497,8 @@ void break_cipher() {
 //			printf("get %llu %llu\n", (X >> 32) & mask_pl[0], (Y >> 32) & mask_cl[0]);
 			if (pairtr.find(v) == pairtr.end()) pairtr[v] = 0;
 			pairtr[v]++;
+			if (i % 1000000 == 0)
+				printf("%f\n", 100. * i / N);
 		}
 		printf("End of pairs gen: size = %d\n", int(pairtr.size()));
 		printf("Nb iterations = %llu\n", ull(pairtr.size()) * (1ull << popcount(key_mask)));
@@ -488,61 +508,17 @@ void break_cipher() {
 			for (ull _k = 0; _k < (1ull << popcount(key_mask)); ++_k) {
 //			for (int _it = 0; _it < 2; ++_it) {
 //				ull _k = _it == 0 ? real_k : rand_k;
-//				ull k = _it == 0 ? key : fill_with_mask(key_mask, _k, 56);
 				ull k = fill_with_mask(key_mask, _k, 56);
-//				ull x = F_func(cut(X, 32), rotkey_left(k, 1));
-//				ull y = F_func(cut(Y, 32), rotkey_left(k, 14)); // change when LEVEL = 14
 				ull xp = F_func(tr.fst[0], rotkey_left(k, 1));
 //				ull yp = F_func(tr.fst[1], rotkey_left(k, 14));
 				ull yp = F_func(tr.fst[1], k);
-//				assert(encrypt((cut(X, 32) << 32) | (x ^ (X >> 32)), rotkey_left(k, 1), LEVEL + 2, 2) == swap_halves(Y));
-				/*
-				assert(encrypt(encrypt(X, key, 1), rotkey_left(key, 1), 4, 2) == encrypt(X, key, 4));
-				assert((((x ^ (X >> 32))) | (cut(X, 32) << 32)) == encrypt(X, key, 1));
-				assert(encrypt(encrypt(X, key, 1), rotkey_left(key, 1), LEVEL + 2, 2) == encrypt(X, key, LEVEL + 2));
-				assert(encrypt(X, key, LEVEL + 1) == ((cut(Y, 32) << 32) | (y ^ (Y >> 32))));
-				assert(swap_halves(encrypt((x ^ (X >> 32)) | (cut(X, 32) << 32), rotkey_left(key, 1), LEVEL + 1, 2)) == 
-					((y ^ (Y >> 32)) | (cut(Y, 32) << 32)));
-				*/
 				int eta = 0;
 				for (int j = 0; j < m; ++j) {
-//					print_bits(it.fst, 56); puts("");
-//					print_bits(key, 56); puts("");
-//					print_bits(k, 56); puts("");
-//					assert((mask_pl & (x ^ (X >> 32))) == (mask_pl & cut(encrypt(X, key, 1), 32)));
-					/*
-					print_bits(key, 56); puts("");
-					print_bits(k, 56); puts("");
-					print_bits(it.fst, 56); puts("");
-					print_bits(mask_ch & (y ^ (Y >> 32)), 64); puts("");
-					print_bits(encrypt(Y, k, 1), 64); puts("");
-					print_bits(encrypt(Y, rotkey_left(k, 1), 1), 64); puts("");
-					print_bits(mask_ch & cut(encrypt(Y, rotkey_left(k, 11), 1), 32), 64); puts("");
-					puts("-------");
-					*/
-//					assert((mask_cl & encrypt(0, rotkey_left(key, 13), 1)) == (mask_cl & encrypt(0, rotkey_left(k, 13), 1)));
-//					assert((mask_cl & (y ^ (Y >> 32))) == (mask_cl & encrypt(Y, rotkey_left(k, 13), 1)));
-					/*
-					assert((mask_pl[j] & x) == (mask_pl[j] & xp));
-					assert((mask_pl[j] & (X >> 32)) == (mask_pl[j] & v[1]));
-					assert((mask_ph[j] & cut(X, 32)) == (mask_ph[j] & v[0]));
-					assert((mask_cl[j] & y) == (mask_cl[j] & yp));
-					assert((mask_cl[j] & (Y >> 32)) == (mask_cl[j] & v[2]));
-					assert((mask_ch[j] & cut(Y, 32)) == (mask_ch[j] & v[3]));
-					*/
 					eta = (eta << 1) | xor_all(
 						tr.fst[2 + j] ^
 						(mask_pl[j] & xp) ^
 						(mask_cl[j] & yp)
 					);
-					/*
-					eta |= xor_all(
-						(mask_pl & cut(X, 32)) ^
-						(mask_ph & (X >> 32)) ^
-						(mask_cl & cut(Y, 32)) ^
-						(mask_ch & (Y >> 32))
-					) << j;
-					*/
 				}
 				F[_k][eta] += tr.snd;
 			}
@@ -556,30 +532,23 @@ void break_cipher() {
 	//		}
 		}
 		puts("end of online phase");
+
+#ifdef USE_LLR
+			
+#endif
+	
 		// off-line phase of alg 2 using khi^2-method
 		vector<pair<double, ull>> S;
 		for (ull k = 0; k < (1ull << popcount(key_mask)); ++k) {
 			double s = 0;
+#ifdef USE_LLR
+#else
 			for (int eta = 0; eta < (1 << m); ++eta)
 				s += square(1. * F[k][eta] / N - 1. / (1 << m));
-///			if (k == _k)
-//				printf("%.10e\n", square(1. * F[k][0] / N - 1. / (1 << m)));
+#endif
 			S.push_back({s, k});
 		}
 		sort(S.begin(), S.end());
-		/*
-		print_bits(it.fst, 56);
-		puts("");
-		print_bits(key, 56);
-		puts("");
-		print_bits(key&it.fst, 56);
-		puts("");
-		print_bits(empty_with_mask(it.fst, key), 56);
-		puts("");
-		print_bits(fill_with_mask(it.fst, empty_with_mask(it.fst, key), 56), 56);
-		puts("");
-		puts("----------");
-		*/
 		int p = 0;
 		for (auto it2: S) {
 			if (it2.snd == empty_with_mask(key_mask, key, 56))
@@ -588,7 +557,6 @@ void break_cipher() {
 		}
 	}
 }
-
 
 int maxpop;
 ull posmax;
@@ -616,7 +584,7 @@ void max_indep(int i = 0, ull mask = 0) {
 int main() {
 	time_t seed = time(NULL);
 	printf("seed = %u\n", (unsigned)seed);
-//	srand(seed);
+	srand(seed);
 	assert(RAND_MAX == INT_MAX);
 	key = rand() + ((1ull * rand() % (1 << 24)) << 32);
 	extract();
