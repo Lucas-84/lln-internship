@@ -336,10 +336,10 @@ void generate(int side, Matrix m, uint in, uint out, int i, int imax) {
 		}
 		return;
 	}
-//	int upp = i == 0 || i == 4 ? 256 : (1 << 5);
+	int upp = i == 0 || i == 4 ? 256 : (1 << 4);
 //	int upp = i == 0 || i == 4 ? 256 : ((1 << 6) + (1 << 7));
 //	int upp = i == 0 || i == 4 ? 256 : (1 << 6);
-	int upp = 256;
+//	int upp = 256;
 	for (int x = 0; x < upp; ++x) {
 		int p = aone[i][x].snd;
 		if (x > 0 && (i == 0 || i == 4)) {
@@ -460,7 +460,7 @@ void compute_best_approx_one() {
 //					auto r = sides[3][s];
 					ll g = (l.snd * m.snd).trace();
 					q.push({llabs(g), shiftrot((l_in << 16) | m_in) | (applyp((l_out << 16)| m_out) << 32)});
-					if (q.size() > (1 << 29))
+					if (q.size() > (1 << 20))
 						q.pop();
 //				}
 //			}
@@ -518,7 +518,7 @@ void compute_best_approx(int levelmax, int level = 1, double f = 1., bool nonnul
 	if (level > levelmax)
 		return;
 	if (level <= 2) {
-		for (int i = int(vone.size()) - 1; int(vone.size()) - i < 8e5 && i >= 0; --i) {
+		for (int i = int(vone.size()) - 1; int(vone.size()) - i < 1e5 && i >= 0; --i) {
 //			if (level == 1 && i == int(vone.size()) - 1)
 //				continue;
 
@@ -555,16 +555,16 @@ void compute_best_approx(int levelmax, int level = 1, double f = 1., bool nonnul
 //				assert(ftot >= B[levelmax]);
 				double score = ftot * (1 << (levelmax - 1));
 				if (nonnul || gammay[level] != 0) {
-					if (level == 14) {
-						vector<ull> v(14);
-						for (int i = 1; i <= 14; ++i)
+					if (level == 6) {
+						vector<ull> v(6);
+						for (int i = 1; i <= 6; ++i)
 							v[i - 1] = (ull(gammay[i]) << 32) | gammax[i];
 						res_all.insert({score, v});
 					}
 					B[levelmax].push(score);
 					if (B[levelmax].size() > NB_APPROX) {
 						double s = B[levelmax].top();
-						if (level == 14) {
+						if (level == 6) {
 							auto it_fst = res_all.lower_bound({s, vector<ull>(0)});	
 							assert(it_fst != res_all.end());
 							res_all.erase(it_fst);	
@@ -623,7 +623,7 @@ int main() {
 //		for (int i = 0; i < NB_APPROX; ++i)
 //			B[level].push(0);
 //	}
-	for (int level = 1; level <= 14; ++level) {
+	for (int level = 1; level <= 6; ++level) {
 		compute_best_approx(level);
 		printf("Best bias for level %d = ", level);
 		printdoublepower2(B[level].top());
@@ -634,7 +634,7 @@ int main() {
 //		B[level].printfloat();
 		fflush(stdout);
 	}
-	FILE *fp = fopen("approx", "a");
+	FILE *fp = fopen("approx6", "a");
 	for (auto it: res_all) {
 		fprintf(fp, "%.20e ", it.fst);
 		for (ull x: it.snd)
