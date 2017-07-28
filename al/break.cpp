@@ -274,10 +274,10 @@ void test() {
 }
 
 // number of plaintext/ciphertext couples
-const ull N = 1ull << 32;
-const int L = 14;
-const int M = 6;
-const int LEVEL = 6;
+const ull N = 1ull << 50;
+const int L = 26;
+const int M = 4;
+const int LEVEL = 14;
 //vector<pair<double, <ull>>> approx[8];
 
 ull one(int nb_bits) {
@@ -311,7 +311,7 @@ void printdoublepower2(double x) {
 
 void extract() {
 //	FILE *fp = fopen("approx6", "r");
-	FILE *fp = fopen("approx6", "r");
+	FILE *fp = fopen("approx", "r");
 	assert(fp != NULL);
 	char line[1024];
 	map<vector<ull>, double> mapprox;
@@ -379,7 +379,7 @@ void extract() {
 		}
 	}
 	printf("size = %d\n", int(mmask.size()));
-	for (auto it: mmask) {
+	for (auto& it: mmask) {
 		print_bits(it.fst.fst | it.fst.snd, 56);
 		sort(it.snd.begin(), it.snd.end(), [&](int x, int y) { return approxs[x].fst > approxs[y].fst; });
 		/*
@@ -502,13 +502,11 @@ void break_cipher() {
 		}
 		printf("End of pairs gen: size = %d\n", int(pairtr.size()));
 		printf("Nb iterations = %llu\n", ull(pairtr.size()) * (1ull << popcount(key_mask)));
-		ull s = 0;
-		for (auto tr: pairtr) {
-			s += tr.snd;
-			for (ull _k = 0; _k < (1ull << popcount(key_mask)); ++_k) {
+		for (ull _k = 0; _k < (1ull << popcount(key_mask)); ++_k) {
+			ull k = fill_with_mask(key_mask, _k, 56);
+			for (auto tr: pairtr) {
 //			for (int _it = 0; _it < 2; ++_it) {
 //				ull _k = _it == 0 ? real_k : rand_k;
-				ull k = fill_with_mask(key_mask, _k, 56);
 				ull xp = F_func(tr.fst[0], rotkey_left(k, 1));
 //				ull yp = F_func(tr.fst[1], rotkey_left(k, 14));
 				ull yp = F_func(tr.fst[1], k);
@@ -544,7 +542,7 @@ void break_cipher() {
 #ifdef USE_LLR
 #else
 			for (int eta = 0; eta < (1 << m); ++eta)
-				s += square(1. * F[k][eta] / N - 1. / (1 << m));
+				s += square(F[k][eta] - 1. * N / (1 << m));
 #endif
 			S.push_back({s, k});
 		}
@@ -564,7 +562,7 @@ ull posmax;
 void max_indep(int i = 0, ull mask = 0) {
 	if (i >= int(vmask.size())) {
 		int pop = popcount(mask);
-		if (pop > maxpop) {
+		if (pop > 15) {
 			maxpop = pop;
 			posmax = mask;
 			print_bits(mask, 56); puts("");
@@ -581,6 +579,55 @@ void max_indep(int i = 0, ull mask = 0) {
 	max_indep(i + 1, mask);
 }
 
+void compute_best_theorical_gain() {
+	map<ull, vector<int>> best_approxs;	
+	for (auto it: vmask) {
+		if (best_approxs.find(it.fst) == best_approxs.end())
+			best_approxs[it.fst] = vector<int>();
+		for (int x: it.snd)
+			best_approxs[it.fst].push_back(x);
+	}
+	/*
+	for (auto it_map: best_approxs)
+		for (auto it: vmask)
+			if ((it.fst & it_map.fst) == it.fst)
+				it_map.snd.insert(it_map.snd.end(), it.snd.begin(), it.snd.end());
+	*/
+	vector<pair<double, ull>> vq;
+	priority_queue<pair<double, ull>> pq;
+	for (auto& it: best_approxs) {
+		sort(it.snd.begin(), it.snd.end(), [&](int x, int y) { return approxs[x].fst > approxs[y].fst; });
+		double cap = 0, maxcap = 0;
+		int maxm = 0;
+		for (int m = 0; m < int(it.snd.size()); ++m) {
+			double bias = approxs[it.snd[m]].fst;
+			cap += 4 * square(bias);
+			if (N * (cap - maxcap) > m - maxm) {
+				maxm = m;
+				maxcap = cap;
+			}
+		}
+		it.snd.resize(maxm + 1);
+		printf("Best bias = %e | Advantage max = %.5f\n", approxs[it.snd[0]].fst, N * maxcap / 2 - maxm);
+		vq.push_back({N * maxcap / 2 - maxm, it.fst});
+	}
+	for (auto it: vq) pq.push(it);
+	double bestadv = 0;
+	while (!pq.empty()) {
+		double adv1 = pq.top().fst;
+		ull mask1 = pq.top().snd;
+		pq.pop();
+		bestadv = max(bestadv, adv1);
+		if (adv1 <= 0) break;
+		for (auto it: vq) {
+			double adv2 = it.fst;
+			ull mask2 = it.snd;
+			pq.push({adv1 + adv2 - 2 * popcount(mask1 & mask2), mask1 ^ mask2});
+		}
+	}
+	printf("BEST ADV = %.5f\n", bestadv);
+}
+
 int main() {
 	time_t seed = time(NULL);
 	printf("seed = %u\n", (unsigned)seed);
@@ -590,9 +637,10 @@ int main() {
 	extract();
 	for (auto it: mmask)
 		vmask.push_back({it.fst.fst | it.fst.snd, it.snd});
-	retpath = vector<bool>(vmask.size());
-	isinpath = vector<bool>(vmask.size(), true);
+	compute_best_theorical_gain();	
+//	retpath = vector<bool>(vmask.size());
+//	isinpath = vector<bool>(vmask.size(), true);
 //	max_indep();
-	break_cipher();
+//	break_cipher();
 	return 0;
 }
