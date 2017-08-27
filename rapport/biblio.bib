@@ -1,0 +1,211 @@
+@phdthesis{TheseHermelin,
+  author    = {Miia Hermelin},
+  title     = {Multidimensional linear cryptanalysis},
+  school    = {Aalto University, Espoo, Helsinki, Finland},
+  year      = {2010},
+  url       = {https://aaltodoc.aalto.fi/handle/123456789/4802},
+  timestamp = {Mon, 10 Apr 2017 22:11:02 +0200},
+  biburl    = {http://dblp.uni-trier.de/rec/bib/phd/basesearch/Hermelin10},
+  bibsource = {dblp computer science bibliography, http://dblp.org}
+}
+
+@article{refDeHermelin,
+ ISSN = {01621459},
+ URL = {http://www.jstor.org/stable/2289856},
+ abstract = {Multinomial tests for the fit of iid observations X1,...,Xn to a specified distribution F are based on the counts Ni of observations falling in k cells E1,...,Ek that partition the range of the Xj. The earliest such test is based on the Pearson (1900) chi-squared statistic: X2 = Σk i=1 (Ni - npi)2/npi, where pi = PF(Xj in Ei) are the cell probabilities under the null hypothesis. A common competing test is the likelihood ratio test based on LR = 2 Σk i=1 Nilog(Ni/npi). Cressie and Read (1984) introduced a class of multinomial goodness-of-fit statistics, Rλ, based on measures of the divergence between discrete distributions. This class includes both X2 (when λ = 1) and LR (when λ = 0). All of the Rλ have the same chi-squared limiting null distribution. The power of the commonly used members of the class is usually approximated from a noncentral chi-squared distribution that is also the same for all λ. We propose new approximations to the power that vary with the statistic chosen. Both the computation and results on asymptotic error rates suggest that the new approximations are greatly superior to the traditional power approximation for statistics Rλ other than the Pearson X2. The derivation of the limiting null distribution for the Cressie-Read statistics, following that for LR, is based on a Taylor series expansion of Rλ, in which X2 is the dominant term. The same expansion produces the traditional noncentral chi-squared power approximation by considering sequences of alternative distributions for the Xj that approach the hypotheses F at a suitable rate. Our power approximations are obtained from a Taylor series expansion that is valid for arbitrary sequences of alternatives. When linear and quadratic terms are retained, an accurate but computationally difficult approximation, Aλ, in terms of linear combinations of noncentral chi-squares is obtained. A second approximation, Bλ, in terms of a single noncentral chi-squared distribution results from averaging the coefficients in Aλ. This simple approximation performs well. In the important case of the statistic LR, Aλ = Bλ and this new noncentral chi-squared approximation is very accurate. Retaining only linear terms in the expansion produces an approximation Lλ based on a normal distribution; this is generally much inferior to Aλ and Bλ.},
+ author = {F. C. Drost and W. C. M. Kallenberg and D. S. Moore and J. Oosterhoff},
+ journal = {Journal of the American Statistical Association},
+ number = {405},
+ pages = {130-141},
+ publisher = {[American Statistical Association, Taylor & Francis, Ltd.]},
+ title = {Power Approximations to Multinomial Tests of Fit},
+ volume = {84},
+ year = {1989}
+}
+
+@Inbook{bayesianExtension,
+author="Veyrat-Charvillon, Nicolas
+and G{\'e}rard, Beno{\^i}t
+and Renauld, Mathieu
+and Standaert, Fran{\c{c}}ois-Xavier",
+editor="Knudsen, Lars R.
+and Wu, Huapeng",
+title="An Optimal Key Enumeration Algorithm and Its Application to Side-Channel Attacks",
+bookTitle="Selected Areas in Cryptography: 19th International Conference, SAC 2012, Windsor, ON, Canada, August 15-16, 2012, Revised Selected Papers",
+year="2013",
+publisher="Springer Berlin Heidelberg",
+address="Berlin, Heidelberg",
+pages="390--406",
+abstract="Methods for enumerating cryptographic keys based on partial information obtained on key bytes are important tools in cryptanalysis. This paper discusses two contributions related to the practical application and algorithmic improvement of such tools. On the one hand, we observe that the evaluation of leaking devices is generally based on distinguishers with very limited computational cost, such as Kocher's Differential Power Analysis. By contrast, classical cryptanalysis usually considers large computational costs (e.g. beyond 280 for present ciphers). Trying to bridge this gap, we show that allowing side-channel adversaries some computing power has major consequences for the security of leaking devices. For this purpose, we first propose a Bayesian extension of non-profiled side-channel attacks that allows us to rate key candidates according to their respective probabilities. Then we provide a new deterministic algorithm that allows us to optimally enumerate key candidates from any number of (possibly redundant) lists of any size, given that the subkey information is provided as probabilities, at the cost of limited (practically tractable) memory requirements. Finally, we investigate the impact of key enumeration taking advantage of this Bayesian formulation, and quantify the resulting reduction in the data complexity of various side-channel attacks.",
+isbn="978-3-642-35999-6",
+doi="10.1007/978-3-642-35999-6_25",
+url="https://doi.org/10.1007/978-3-642-35999-6_25"
+}
+
+@inproceedings{matsui1994,
+	 author = {Matsui, Mitsuru},
+	  title = {Linear Cryptanalysis Method for DES Cipher},
+	   booktitle = {Workshop on the Theory and Application of Cryptographic Techniques on Advances in Cryptology},
+	    series = {EUROCRYPT '93},
+	     year = {1994},
+	      isbn = {3-540-57600-2},
+	       location = {Lofthus, Norway},
+	        pages = {386--397},
+		 numpages = {12},
+		  url = {http://dl.acm.org/citation.cfm?id=188307.188366},
+		   acmid = {188366},
+		    publisher = {Springer-Verlag New York, Inc.},
+		     address = {Secaucus, NJ, USA},
+} 
+
+@misc{crack,
+	title = {crack.sh --- {The world's fastest DES cracker}},
+	howpublished = {\url{https://crack.sh}},
+	note = {Accès : 2017-06-06}
+}
+
+@Inbook{Junod2001,
+	author="Junod, Pascal",
+	editor="Vaudenay, Serge
+		and Youssef, Amr M.",
+	title="On the Complexity of Matsui's Attack",
+	bookTitle="Selected Areas in Cryptography: 8th Annual International Workshop, SAC 2001 Toronto, Ontario, Canada, August 16--17, 2001 Revised Papers",
+	year="2001",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="199--211",
+	abstract="Linear cryptanalysis remains the most powerful attack against DES at this time. Given 243 known plaintext-ciphertext pairs, Matsui expected a complexity of less than 243 DES evaluations in 85 {\%} of the cases for recovering the key. In this paper, we present a theoretical and experimental complexity analysis of this attack, which has been simulated 21 times using the idle time of several computers. The experimental results suggest a complexity upper-bounded by 241 DES evaluations in 85 {\%} of the case, while more than the half of the experiments needed less than 239 DES evaluations. In addition, we give a detailed theoretical analysis of the attack complexity.",
+	isbn="978-3-540-45537-0",
+	doi="10.1007/3-540-45537-X_16",
+	url="https://doi.org/10.1007/3-540-45537-X_16"
+}
+
+
+@Inbook{Matsui1995,
+	author="Matsui, Mitsuru",
+	editor="De Santis, Alfredo",
+	title="On correlation between the order of S-boxes and the strength of DES",
+	bookTitle="Advances in Cryptology --- EUROCRYPT'94: Workshop on the Theory and Application of Cryptographic Techniques Perugia, Italy, May 9--12, 1994 Proceedings",
+	year="1995",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="366--375",
+	abstract="This paper introduces a practical algorithm for deriving the best differential characteristic and the best linear expression of DES. Its principle is based on a duality between differential cryptanalysis and linear cryptanalysis, and applicable to various block ciphers. Then using this program, we observe how the order of S-boxes affects the strength of DES. We show that the order of the S-boxes is well-arranged against differential cryptanalysis, though it is not the best choice. On the other hand, our experimental results indicate that it is a very weak choice in regard to linear cryptanalysis. In other words, DES can be strengthened by just rearranging the order of the S-boxes.",
+	isbn="978-3-540-44717-7",
+	doi="10.1007/BFb0053451",
+	url="https://doi.org/10.1007/BFb0053451"
+}
+
+
+@Inbook{Biryukov2004,
+	author="Biryukov, Alex
+		and De Canni{\`e}re, Christophe
+		and Quisquater, Micha{\"e}l",
+	editor="Franklin, Matt",
+	title="On Multiple Linear Approximations",
+	bookTitle="Advances in Cryptology -- CRYPTO 2004: 24th Annual International Cryptology Conference, Santa Barbara, California, USA, August 15-19, 2004. Proceedings",
+	year="2004",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="1--22",
+	abstract="In this paper we study the long standing problem of information extraction from multiple linear approximations. We develop a formal statistical framework for block cipher attacks based on this technique and derive explicit and compact gain formulas for generalized versions of Matsui's Algorithm 1 and Algorithm 2. The theoretical framework allows both approaches to be treated in a unified way, and predicts significantly improved attack complexities compared to current linear attacks using a single approximation. In order to substantiate the theoretical claims, we benchmarked the attacks against reduced-round versions of DES and observed a clear reduction of the data and time complexities, in almost perfect correspondence with the predictions. The complexities are reduced by several orders of magnitude for Algorithm 1, and the significant improvement in the case of Algorithm 2 suggests that this approach may outperform the currently best attacks on the full DES algorithm.",
+	isbn="978-3-540-28628-8",
+	doi="10.1007/978-3-540-28628-8_1",
+	url="https://doi.org/10.1007/978-3-540-28628-8_1"
+}
+
+
+
+@inproceedings{ches-2016,
+	  title={Simple Key Enumeration (and Rank Estimation) Using Histograms: An Integrated Approach},
+	    booktitle={CHES},
+	      publisher={Springer},
+	        pages={61-81},
+		  doi={10.1007/978-3-662-53140-2_4},
+		    author={Romain Poussier and François-Xavier Standaert and Vincent Grosso},
+		      year=2016
+}
+@misc{ntl,
+	title = {{NTL: A library for doing Number Theory}},
+	howpublished = {\url{www.shoup.net/ntl/}},
+	note = {Accès : 2017-07-20}
+}
+
+@Inbook{Nyberg1995,
+	author="Nyberg, Kaisa",
+	editor="De Santis, Alfredo",
+	title="Linear approximation of block ciphers",
+	bookTitle="Advances in Cryptology --- EUROCRYPT'94: Workshop on the Theory and Application of Cryptographic Techniques Perugia, Italy, May 9--12, 1994 Proceedings",
+	year="1995",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="439--444",
+	abstract="The results of this paper give the theoretical fundaments on which Matsui's linear cryptanalysis of the DES is based. As a result we obtain precise information on the assumptions explicitely or implicitely stated in [2] and show that the success of Algorithm 2 is underestimated in [2]. We also derive a formula for the strength of Algorithm 2 for DES-like ciphers and see what is its dependence on the plaintext distribution. Finally, it is shown how to achieve proven resistance against linear cryptanalysis.",
+	isbn="978-3-540-44717-7",
+	doi="10.1007/BFb0053460",
+	url="https://doi.org/10.1007/BFb0053460"
+}
+
+@article{Shri14,
+	author = {Shrivastava, Anshumali and Li, Ping},
+	year = {2014},
+	month = {04},
+	pages = {},
+	title = {{Asymmetric LSH (ALSH) for sublinear time Maximum Inner Product Search (MIPS)}},
+	volume = {3},
+	booktitle = {Advances in Neural Information Processing Systems}
+}
+
+@Inbook{FirstCrypt,
+	author="Matsui, Mitsuru",
+	editor="Desmedt, Yvo G.",
+	title="The First Experimental Cryptanalysis of the Data Encryption Standard",
+	bookTitle="Advances in Cryptology --- CRYPTO '94: 14th Annual International Cryptology Conference Santa Barbara, California, USA August 21--25, 1994 Proceedings",
+	year="1994",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="1--11",
+	abstract="This paper describes an improved version of linear cryptanalysis and its application to the first successful computer experiment in breaking the full 16-round DES. The scenario is a known-plaintext attack based on two new linear approximate equations, each of which provides candidates for 13 secret key bits with negligible memory. Moreover, reliability of the key candidates is taken into consideration, which increases the success rate. As a result, the full 16-round DES is breakable with high success probability if 24.3 random plaintexts and their ciphertexts are available. The author carried out the first experimental attack using twelve computers to confirm this: he finally reached all of the 56 secret key bits in fifty days, out of which forty days were spent for generating plaintexts and their ciphertexts and only ten days were spent for the actual key search.",
+	isbn="978-3-540-48658-9",
+	doi="10.1007/3-540-48658-5_1",
+	url="https://doi.org/10.1007/3-540-48658-5_1"
+}
+
+@Inbook{Nguyen2011,
+	author="Nguyen, Phuong Ha
+		and Wu, Hongjun
+		and Wang, Huaxiong",
+	editor="Parampalli, Udaya
+		and Hawkes, Philip",
+	title="Improving the Algorithm 2 in Multidimensional Linear Cryptanalysis",
+	bookTitle="Information Security and Privacy: 16th Australasian Conference, ACISP 2011, Melbourne, Australia, July 11-13, 2011. Proceedings",
+	year="2011",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="61--74",
+	isbn="978-3-642-22497-3",
+	doi="10.1007/978-3-642-22497-3_5",
+	url="https://doi.org/10.1007/978-3-642-22497-3_5"
+}
+
+@Inbook{Collard2007,
+	author="Collard, Baudoin
+		and Standaert, F. -X.
+		and Quisquater, Jean-Jacques",
+	editor="Nam, Kil-Hyun
+		and Rhee, Gwangsoo",
+	title="Improving the Time Complexity of Matsui's Linear Cryptanalysis",
+	bookTitle="Information Security and Cryptology - ICISC 2007: 10th International Conference, Seoul, Korea, November 29-30, 2007. Proceedings",
+	year="2007",
+	publisher="Springer Berlin Heidelberg",
+	address="Berlin, Heidelberg",
+	pages="77--88",
+	isbn="978-3-540-76788-6",
+	doi="10.1007/978-3-540-76788-6_7",
+	url="https://doi.org/10.1007/978-3-540-76788-6_7"
+}
+
+@misc{github,
+	title = {{Le dépôt Github contenant l'essentiel du code écrit dans le cadre du stage}},
+	howpublished = {\url{https://github.com/Lucas-84/lln-internship}}
+}

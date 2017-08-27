@@ -1,14 +1,19 @@
 #include <algorithm>
+#include <boost/math/distributions/non_central_chi_squared.hpp>
 #include <cassert>
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
 #include <queue>
+#include <random>
 #include <set>
 #include <sys/time.h>
 #include <vector>
+#include "hel_execute.h"
+#include "scores_example.h"
 using namespace std;
+//using namespace boost::math;
 #define fst first
 #define snd second
 #define mp make_pair
@@ -274,10 +279,10 @@ void test() {
 }
 
 // number of plaintext/ciphertext couples
-const ull N = 1ull << 50;
-const int L = 26;
-const int M = 4;
-const int LEVEL = 14;
+ull N = 1ull << 10;
+const int L = 16;
+const int M = 3;
+const int LEVEL = 6;
 //vector<pair<double, <ull>>> approx[8];
 
 ull one(int nb_bits) {
@@ -310,8 +315,8 @@ void printdoublepower2(double x) {
 }
 
 void extract() {
-//	FILE *fp = fopen("approx6", "r");
-	FILE *fp = fopen("approx", "r");
+	FILE *fp = fopen("approx6", "r");
+//	FILE *fp = fopen("approx", "r");
 	assert(fp != NULL);
 	char line[1024];
 	map<vector<ull>, double> mapprox;
@@ -354,16 +359,18 @@ void extract() {
 		}
 		key_mask_out = do_inv_perm(key_mask_out, PC2, 48, 56);
 //		assert(rotkey_left(rotkey_right(key_mask_out, 14), 14) == key_mask_out);
-//		key_mask_out = rotkey_right(key_mask_out, 14); // delete for LEVEL == 14
+		key_mask_out = rotkey_right(key_mask_out, 14); // delete for LEVEL == 14
 		ull key_mask = key_mask_in | key_mask_out;
 		if (popcount(key_mask) <= L) {
 //			if (fabs(score - 9.53e-4) <= 1e-5) {
 //			if (fabs(score - 3.81e-3) <= 1e-4) {
+			if (key_mask == 0x0082049100848822ull || key_mask == 0x0044124082481204ull) {
 				approxs.push_back({score, mask});
 				auto key_pair = make_pair(key_mask_in, key_mask_out);
 				if (mmask.find(key_pair) == mmask.end())
 					mmask[key_pair] = vector<int>(0);
 				mmask[key_pair].push_back(int(approxs.size()) - 1);
+			}
 //			}
 			/*
 			printf("%e ", score);
@@ -440,15 +447,25 @@ ull empty_with_mask(ull mask, ull val, int nb_bits) {
 vector<int> F[1 << L];
 vector<bool> retpath;
 vector<bool> isinpath;
+double **log_probas;
+unsigned char real_key_bits[24];
 
 void break_cipher() {
+	log_probas = (double **)malloc(NB_SUBKEY_INIT * sizeof *log_probas);
 	for (int _i = 0; _i < int(vmask.size()); ++_i) {
-		if (!isinpath[_i])
-			continue;
+//		if (!isinpath[_i])
+//			continue;
 		auto it = vmask[_i];
 		auto key_mask = it.fst;
+		puts("Key mask:");
+		print_bits(key_mask, 64); puts("");
 		// on-line phase of Matsui's alg 2 in multiple dimension
 		int m = min(M, int(it.snd.size()));
+		for (int i = 0; i < m; ++i) {
+			printf("%d-th approx : ", i);
+			printdoublepower2(approxs[it.snd[i]].fst);
+			puts("");
+		}
 		for (int i = 0; i < (1 << L); ++i)
 			F[i] = vector<int>(1 << m);
 		vector<uint> mask_pl(m), mask_ph(m), mask_cl(m), mask_ch(m);
@@ -459,7 +476,13 @@ void break_cipher() {
 			mask_ch[j] = approxs[it.snd[j]].snd[LEVEL - 1] >> 32;
 		}
 		ull real_k = empty_with_mask(key_mask, key, 56);
-		ull rand_k = rand() % (1ull << popcount(key_mask));
+		puts("real k:");
+		print_bits(real_k, 64); puts("");
+		for (int j = 0; j < 12; ++j) {
+			real_key_bits[12 * _i + j] = (real_k >> (11 - j)) & 1;
+			printf("%d-th bits = %llu\n", 12*_i+j, (real_k>>(11-j))&1);
+		}
+//		ull rand_k = rand() % (1ull << popcount(key_mask));
 		printf("%llu %llu %d ", N, 1ull << popcount(key_mask), m);
 		printdoublepower2(approxs[it.snd[0]].fst);
 		puts("");
@@ -508,8 +531,8 @@ void break_cipher() {
 //			for (int _it = 0; _it < 2; ++_it) {
 //				ull _k = _it == 0 ? real_k : rand_k;
 				ull xp = F_func(tr.fst[0], rotkey_left(k, 1));
-//				ull yp = F_func(tr.fst[1], rotkey_left(k, 14));
-				ull yp = F_func(tr.fst[1], k);
+				ull yp = F_func(tr.fst[1], rotkey_left(k, 14));
+//				ull yp = F_func(tr.fst[1], k);
 				int eta = 0;
 				for (int j = 0; j < m; ++j) {
 					eta = (eta << 1) | xor_all(
@@ -535,22 +558,48 @@ void break_cipher() {
 			
 #endif
 	
+		double c = 0;
+		for (int j = 0; j < m; ++j)
+			c += 4 * square(approxs[vmask[_i].snd[j]].fst);
+		printf("capacity of approximation = %e\n", c);
 		// off-line phase of alg 2 using khi^2-method
-		vector<pair<double, ull>> S;
+		log_probas[_i] = (double *)malloc(NB_KEY_VALUE_INIT * sizeof *log_probas[_i]);
+		assert((1 << popcount(key_mask)) == NB_KEY_VALUE_INIT);
+		auto distrib = boost::math::non_central_chi_squared_distribution<>{(1 << m) - 1., 0};
+		auto distrib2 = boost::math::non_central_chi_squared_distribution<>{(1 << m) - 1., N * c};
+		vector<pair<double, ull>> S1, S2;
+		double tot = 0;
 		for (ull k = 0; k < (1ull << popcount(key_mask)); ++k) {
 			double s = 0;
 #ifdef USE_LLR
 #else
 			for (int eta = 0; eta < (1 << m); ++eta)
-				s += square(F[k][eta] - 1. * N / (1 << m));
+				s += (1 << m) * N * square(1. * F[k][eta] / N - 1. / (1 << m));
 #endif
-			S.push_back({s, k});
+			s += 1e-14;
+			S2.push_back({s, k});
+			log_probas[_i][k] = boost::math::pdf(distrib2, s) / (boost::math::pdf(distrib, s) + 1e-14);
+			tot += log_probas[_i][k];
 		}
-		sort(S.begin(), S.end());
+		for (ull k = 0; k < (1ull << popcount(key_mask)); ++k) {
+			log_probas[_i][k] = log(log_probas[_i][k] / tot);
+			assert(log_probas[_i][k] < 0);
+			S1.push_back({log_probas[_i][k], k});
+		}
+		sort(S1.begin(), S1.end());
+		sort(S2.begin(), S2.end());
 		int p = 0;
-		for (auto it2: S) {
+		puts("global mask = ");
+		print_bits(empty_with_mask(key_mask, key, 56), 12); puts("");
+		for (auto it2: S1) {
 			if (it2.snd == empty_with_mask(key_mask, key, 56))
-				printf("found pos %d/%d (%e .. %e .. %e)\n", int(S.size()) - p, int(S.size()), S[0].fst, it2.fst, S.back().fst);
+				printf("found pos %d/%d (%e .. %e .. %e)\n", int(S1.size()) - p, int(S1.size()), S1[0].fst, it2.fst, S1.back().fst);
+			p++;
+		}
+		p = 0;
+		for (auto it2: S2) {
+			if (it2.snd == empty_with_mask(key_mask, key, 56))
+				printf("found pos %d/%d (%e .. %e .. %e)\n", int(S2.size()) - p, int(S2.size()), S2[0].fst, it2.fst, S2.back().fst);
 			p++;
 		}
 	}
@@ -628,19 +677,163 @@ void compute_best_theorical_gain() {
 	printf("BEST ADV = %.5f\n", bestadv);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+	N = atoll(argv[1]);
 	time_t seed = time(NULL);
 	printf("seed = %u\n", (unsigned)seed);
-	srand(seed);
+//	srand(seed);
+	srand(1503764745);
 	assert(RAND_MAX == INT_MAX);
 	key = rand() + ((1ull * rand() % (1 << 24)) << 32);
+	puts("Key:");
+	print_bits(key, 64); puts("");
 	extract();
-	for (auto it: mmask)
-		vmask.push_back({it.fst.fst | it.fst.snd, it.snd});
-	compute_best_theorical_gain();	
+	for (auto it: mmask) {
+//		if (approxs[it.snd[0]].fst > 1. / (1 << 9)) {
+			vmask.push_back({it.fst.fst | it.fst.snd, it.snd});
+//			print_bits(it.fst.fst | it.fst.snd, 64); puts("");
+//			printdoublepower2(approxs[it.snd[0]].fst);
+//			puts("");
+//		}
+	}
+//	compute_best_theorical_gain();	
 //	retpath = vector<bool>(vmask.size());
 //	isinpath = vector<bool>(vmask.size(), true);
 //	max_indep();
-//	break_cipher();
+	break_cipher();
+	// Begin : snippet RE
+	int i;
+
+
+	LL* real_key = NULL; //will contain the real key (optional for key enumeration)
+	hel_result_t* result = NULL; //will contain the results of either rank estimation or key enumeration
+
+	unsigned char kk[16]  = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+	//real key of the simulated results
+
+	unsigned char pt1[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	unsigned char pt2[16] = {255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255};
+	unsigned char ct1[16] = {198,161,59,55,135,143,91,130,111,79,129,98,161,200,216,121};
+	unsigned char cc2[16] = {60,68,31,50,206,7,130,35,100,215,162,153,14,80,187,19};
+	//associated plaintexts/ciphertexts
+
+	unsigned char** texts = (unsigned char**) malloc(4*sizeof(unsigned char*));
+	for (i = 0 ; i < 4 ; i++){
+		texts[i] = (unsigned char*) malloc(16*sizeof(unsigned char));
+	}
+	for (i = 0; i < 16 ; i++){
+		texts[0][i] = pt1[i];
+		texts[1][i] = pt2[i];
+		texts[2][i] = ct1[i];
+		texts[3][i] = cc2[i];
+	}
+	//load the plaintext ciphertext into a single unsigned char**
+	//the form is the following => texts[0] contains the first plaintext, and tests[1] the associated ciphertext
+	//texts[2] contains the 2nd plaintext and test[3] the associated ciphertext
+
+
+	real_key =  (LL*) malloc(16*sizeof(LL));
+	for (int i = 0; i < 16; ++i)
+		real_key[i] = 0;
+	for (int i = 0; i < 2; ++i)
+		for (int j = 0; j < 12; ++j)
+			real_key[i] = (real_key[i] << 1) | real_key_bits[12 * i + j];
+	
+	print_bits(real_key[0], 12); puts("");
+	print_bits(real_key[1], 12); puts("");
+	printf("get %.6e %.6e\n", log_probas[0][real_key[0]], log_probas[1][real_key[1]]);
+	/*
+	puts("KEY:");
+	print_bits(real_key[0], 8); puts(""); 
+	print_bits(real_key[1], 8); puts(""); 
+	print_bits(real_key[2], 8); puts(""); 
+	*/
+	//load the real subkey dval_to_printues
+
+	/*
+	log_probas = (double **)malloc(NB_SUBKEY_INIT * sizeof *log_probas);
+	for (int i = 0; i < NB_SUBKEY_INIT; ++i) {
+		log_probas[i] = (double *)malloc(NB_KEY_VALUE_INIT * sizeof *log_probas[i]);
+		double S = 0;
+		double tot = 0;
+		for (int j = 0; j < NB_KEY_VALUE_INIT; ++j) {
+			log_probas[i][j] = rand();
+			tot += log_probas[i][j];
+		}
+		for (int j = 0; j < NB_KEY_VALUE_INIT; ++j) {
+			log_probas[i][j] = log(log_probas[i][j] / tot);
+		}
+//		printf("%.8f %.8f %.8f\n", log_probas[i][0], log_probas[i][rand() % 4096], log_probas[i][4095]);
+//		log_probas[i][i] = log(0.3);
+//		log_probas[i][i + 1] = log(0.2);
+	}
+	*/
+
+//	return 0;
+//	log_probas = get_scores_from_example(21);
+	//load log probas from examples where the real key depth is around 2^21
+	//function defined in score_example.cpp
+	//parameter: the approximated rank of the real key.
+	//6 possibles log probas are provided with a key depth of (approximatively) 10,21,25,29,34 and 39.
+
+	//one can instead load its own attack result (and the associated true subkeys if needed and the associated plaintexts/ciphertexts for key testing on the fly
+
+
+	//STARTING DECLARATION OF INPUT PARAMETERS
+	int nb_bin;
+	int merge;
+	ZZ bound_start;
+	ZZ bound_stop;
+	//ENDING DECLARATION OF INPUT PARAMETERS
+	
+
+	//STARTING DECLARATION OF OUTPUT PARAMETERS
+	ZZ rank_estim_rounded,rank_estim_min,rank_estim_max;
+	double time_rank;
+//	ZZ rank_enum_rounded,rank_enum_min,rank_enum_max;
+	//ENDING DECLARATION OF OUTPUT PARAMETERS
+
+	ZZ two;
+	two = 2; //used to compute the bound_start and bound_end using two^(integer)
+	//note that the bounds can be any number (not especially a power of two)
+
+	RR rval_to_print; //to convert some ZZ to RR
+	RR rr_log2 = log(conv<RR>(two)); //log2 as RR
+
+	//EXAMPLE FOR RANK ESTIMATION
+
+	nb_bin = 2048;
+	merge = 2;
+	//setting rank estimation parameters
+
+	cout << "results rank estimation" << endl;
+	cout << "nb_bin = " << nb_bin << endl;
+	cout << "merge = " << merge << endl;
+
+	result = hel_execute_rank((LL)merge, (LL)nb_bin, log_probas, real_key);
+	puts("got executed");
+
+	rank_estim_rounded = hel_result_get_estimation_rank(result);
+	rank_estim_min = hel_result_get_estimation_rank_min(result);
+	rank_estim_max = hel_result_get_estimation_rank_max(result);
+	time_rank = hel_result_get_estimation_time(result);
+	//these result accessors are in hel_init.cpp/h
+
+	
+	rval_to_print = conv<RR>(rank_estim_min);
+        cout << "min: 2^" << 32+log(rval_to_print)/rr_log2 <<endl;
+        rval_to_print = conv<RR>(rank_estim_rounded);
+        cout << "actual rounded: 2^" << 32+log(rval_to_print)/rr_log2 <<endl;
+        rval_to_print = conv<RR>(rank_estim_max);
+        cout << "max: 2^" << 32+log(rval_to_print)/rr_log2 <<endl;
+        cout << "time rank: " << time_rank << " seconds" << endl;
+	cout << endl << endl;
+	hel_free_result(result);
+	for (int i = 0; i < NB_SUBKEY_INIT; ++i)
+		free(log_probas[i]);
+	free(log_probas);
 	return 0;
 }
+
+
+
